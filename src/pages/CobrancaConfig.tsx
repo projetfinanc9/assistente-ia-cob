@@ -229,10 +229,10 @@ const CobrancaConfig = () => {
               <CardTitle>Variáveis Disponíveis</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              <p><code>{cliente}</code> - Nome do cliente</p>
-              <p><code>{dias}</code> - Dias até o vencimento</p>
-              <p><code>{valor}</code> - Valor do boleto</p>
-              <p><code>{vencimento}</code> - Data de vencimento</p>
+              <p><code>{"{cliente}"}</code> - Nome do cliente</p>
+              <p><code>{"{dias}"}</code> - Dias até o vencimento</p>
+              <p><code>{"{valor}"}</code> - Valor do boleto</p>
+              <p><code>{"{vencimento}"}</code> - Data de vencimento</p>
             </CardContent>
           </Card>
         </div>
