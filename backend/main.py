@@ -577,7 +577,7 @@ async def webhook_whatsapp(request: Request):
         msg = messages[0]
         from_number = msg.get("from")             # ex: "559193808761"
         
-        # Inicializar text com valor padrão
+        # Inicializar text com valor padrão (proteção contra UnboundLocalError)
         text = msg.get("text", {}).get("body", "")
         
         # Verifica se é uma resposta de botão interativo
@@ -614,10 +614,15 @@ async def webhook_whatsapp(request: Request):
                     logging.info(f"✅ Item da lista selecionado: {item_title} -> {texto}")
                 else:
                     logging.warning(f"⚠️ Índice {item_index} fora do range (total: {len(boletos)})")
-                    text = item_title
+                    text = item_title if item_title else ""
             else:
                 logging.warning(f"⚠️ item_id não começa com 'item_': {item_id}")
-                text = item_title
+                text = item_title if item_title else ""
+        
+        # Proteção final: garantir que text sempre tem valor
+        if not text:
+            text = ""
+            logging.warning("⚠️ text está vazio após processamento, usando string vazia")
 
         user_id = f"whatsapp:{from_number}"
 
