@@ -52,8 +52,14 @@ def listar_boletos_por_cliente(cliente_id: int):
     url = f"{BASE_URL}/accounts-receivable/receivable-bills?customerId={cliente_id}"
     r = requests.get(url, headers=json_headers, timeout=30)
     if r.status_code != 200:
+        logging.warning(f"⚠️ Erro ao buscar boletos do cliente {cliente_id}: {r.status_code}")
         return []
-    return r.json().get("results") or []
+    data = r.json()
+    results = data.get("results") or []
+    logging.warning(f"📄 API retornou {len(results)} boletos para cliente {cliente_id}")
+    if results:
+        logging.warning(f"🔍 Primeiro boleto: {results[0]}")
+    return results
 
 
 def listar_parcelas(titulo_id: int):
