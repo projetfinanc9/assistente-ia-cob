@@ -43,6 +43,9 @@ def salvar_configuracoes(subdomain: str, username: str, password: str):
 # ============================================================
 # 🔐 CONFIGURAÇÕES DE AUTENTICAÇÃO SIENGE
 # ============================================================
+# Carrega configurações salvas ou usa variáveis de ambiente
+config_salva = carregar_configuracoes()
+
 # Prioriza variáveis de ambiente sobre arquivo de configuração
 subdominio = os.getenv("SIENGE_SUBDOMINIO") or config_salva.get("subdomain") or "cctcontrol"
 usuario = os.getenv("SIENGE_USERNAME") or config_salva.get("username") or "cctcontrol-api"
