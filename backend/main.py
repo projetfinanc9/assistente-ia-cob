@@ -577,6 +577,9 @@ async def webhook_whatsapp(request: Request):
         msg = messages[0]
         from_number = msg.get("from")             # ex: "559193808761"
         
+        # Inicializar text com valor padrão
+        text = msg.get("text", {}).get("body", "")
+        
         # Verifica se é uma resposta de botão interativo
         interactive = msg.get("interactive")
         if interactive and interactive.get("type") == "button_reply":
@@ -607,15 +610,14 @@ async def webhook_whatsapp(request: Request):
                 if item_index < len(boletos):
                     boleto = boletos[item_index]
                     texto = f"boleto {boleto['titulo_id']} {boleto['parcela_id']}"
+                    text = texto  # Atualiza text com o comando do boleto
                     logging.info(f"✅ Item da lista selecionado: {item_title} -> {texto}")
                 else:
                     logging.warning(f"⚠️ Índice {item_index} fora do range (total: {len(boletos)})")
-                    texto = item_title
+                    text = item_title
             else:
                 logging.warning(f"⚠️ item_id não começa com 'item_': {item_id}")
-                texto = item_title
-        else:
-            text = msg.get("text", {}).get("body", "")
+                text = item_title
 
         user_id = f"whatsapp:{from_number}"
 
