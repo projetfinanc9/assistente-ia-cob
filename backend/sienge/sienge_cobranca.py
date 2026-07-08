@@ -113,14 +113,15 @@ def verificar_boletos_vencendo() -> List[Dict]:
     Retorna lista de dicionários com informações do cliente e boletos.
     """
     config = carregar_configuracao_cobranca()
+    logging.warning(f"🔧 Configuração carregada: {config}")
     
     if not config.get("ativo"):
-        logging.info("⚠️ Sistema de cobrança automática está desativado")
+        logging.warning("⚠️ Sistema de cobrança automática está desativado")
         return []
     
     lembretes = config.get("lembretes", [])
     if not lembretes:
-        logging.info("⚠️ Nenhum lembrete configurado")
+        logging.warning("⚠️ Nenhum lembrete configurado")
         return []
     
     logging.warning(f"🔍 Verificando boletos com {len(lembretes)} lembretes configurados...")
