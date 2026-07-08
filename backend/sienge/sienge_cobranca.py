@@ -166,7 +166,7 @@ def verificar_boletos_vencendo() -> List[Dict]:
         logging.warning(f"📄 Cliente {cliente_nome}: {len(boletos)} boletos encontrados")
         
         for boleto in boletos:
-            titulo_id = boleto.get("id")
+            titulo_id = boleto.get("receivableBillId")
             quitado = boleto.get("payOffDate")
             
             if quitado:
