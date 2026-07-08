@@ -380,6 +380,59 @@ async def testar_cobranca():
         return {"error": str(e)}
 
 # ============================================================
+# ⚙️ ENDPOINT PARA CONFIGURAR COBRANÇA
+# ============================================================
+@app.post("/cobranca-config")
+async def salvar_configuracao_cobranca(config: ConfiguracaoCobranca):
+    """
+    Salva configurações de cobrança
+    """
+    import json
+    from pathlib import Path
+    
+    config_file = Path(__file__).parent / "cobranca_config.json"
+    
+    try:
+        with open(config_file, 'w', encoding='utf-8') as f:
+            json.dump(config.dict(), f, indent=2, ensure_ascii=False)
+        logging.info(f"✅ Configuração de cobrança salva: ativo={config.ativo}, lembretes={len(config.lembretes)}")
+        return {"status": "ok", "message": "Configuração salva com sucesso"}
+    except Exception as e:
+        logging.error(f"❌ Erro ao salvar configuração de cobrança: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.get("/cobranca-config")
+async def carregar_configuracao_cobranca_api():
+    """
+    Carrega configurações de cobrança
+    """
+    import json
+    from pathlib import Path
+    
+    config_file = Path(__file__).parent / "cobranca_config.json"
+    
+    if config_file.exists():
+        try:
+            with open(config_file, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                return config
+        except Exception as e:
+            logging.error(f"❌ Erro ao carregar configuração de cobrança: {e}")
+            return {"ativo": False, "lembretes": []}
+    
+    # Configuração padrão
+    return {
+        "ativo": False,
+        "lembretes": [
+            {
+                "dias_antes": 5,
+                "mensagem": "Olá {cliente}, seu boleto vence em {dias} dias. Valor: R$ {valor}",
+                "enviar_segunda_via": True
+            }
+        ]
+    }
+
+# ============================================================
 # 🌐 WEBHOOK WHATSAPP CLOUD API (VERIFICAÇÃO)
 # ============================================================
 @app.get("/webhook-whatsapp")
@@ -536,19 +589,30 @@ async def webhook_whatsapp(request: Request):
             list_reply = interactive.get("list_reply", {})
             item_id = list_reply.get("id", "")
             item_title = list_reply.get("title", "")
+            logging.info(f"📋 List reply recebido: item_id={item_id}, item_title={item_title}")
+            
             # Se for um item de lista, extrai o comando do ID
             if item_id.startswith("item_"):
                 # Recupera o contexto para saber qual boleto foi selecionado
-                ctx = usuarios_contexto.get(f"whatsapp:{from_number}", {})
+                user_id = f"whatsapp:{from_number}"
+                ctx = usuarios_contexto.get(user_id, {})
+                logging.info(f"🔍 Contexto do usuário {user_id}: {ctx}")
+                
                 boletos = ctx.get("boletos_disponiveis", [])
+                logging.info(f"📋 Boletos disponíveis no contexto: {len(boletos)}")
+                
                 item_index = int(item_id.replace("item_", ""))
+                logging.info(f"🔢 Índice do item: {item_index}")
+                
                 if item_index < len(boletos):
                     boleto = boletos[item_index]
                     texto = f"boleto {boleto['titulo_id']} {boleto['parcela_id']}"
-                    logging.info(f"📋 Item da lista selecionado: {item_title} -> {texto}")
+                    logging.info(f"✅ Item da lista selecionado: {item_title} -> {texto}")
                 else:
+                    logging.warning(f"⚠️ Índice {item_index} fora do range (total: {len(boletos)})")
                     texto = item_title
             else:
+                logging.warning(f"⚠️ item_id não começa com 'item_': {item_id}")
                 texto = item_title
         else:
             text = msg.get("text", {}).get("body", "")
