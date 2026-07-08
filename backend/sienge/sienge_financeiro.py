@@ -2,26 +2,10 @@ import requests
 import logging
 import time
 import json
-from base64 import b64encode
 from datetime import datetime, timedelta
+from .sienge_config import BASE_URL, json_headers, _token
 
 logging.warning("🚀 Rodando versão 6.0 do sienge_financeiro.py (com nomes de contas financeiras e IA integrada)")
-
-# ============================================================
-# 🔐 Configurações de autenticação
-# ============================================================
-subdominio = "cctcontrol"
-usuario = "cctcontrol-api"
-senha = "9SQ2MaNrFOeZOOuOAqeSRy7bYWYDDf85"
-
-BASE_URL = f"https://api.sienge.com.br/{subdominio}/public/api/v1"
-_token = b64encode(f"{usuario}:{senha}".encode()).decode()
-
-json_headers = {
-    "Authorization": f"Basic {_token}",
-    "accept": "application/json",
-    "Content-Type": "application/json",
-}
 
 _cache = {}
 

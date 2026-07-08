@@ -5,6 +5,7 @@ import { ChatHeader } from "@/components/ChatHeader";
 import { ConversationsSidebar } from "@/components/ConversationsSidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { Bot } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 interface Message {
   role: "user" | "assistant";
@@ -18,6 +19,7 @@ interface Message {
 }
 
 const Index = () => {
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -35,7 +37,7 @@ const Index = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch("https://constru-ai-connect.onrender.com/mensagem", {
+      const response = await fetch("http://localhost:8000/mensagem", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -109,18 +111,25 @@ const Index = () => {
                 </p>
                 <div className="flex flex-wrap justify-center gap-2">
                   {[
-                    "pedidos pendentes",
-                    "itens do pedido 123",
-                    "autorizar pedido 101",
+                    "💳 Segunda via de boletos",
+                    "📋 Pedidos pendentes",
+                    "🔔 Relatório de cobranças",
+                    "📊 Resumo financeiro",
                   ].map((sugestao, i) => (
                     <button
                       key={i}
-                      onClick={() => handleSuggestion(sugestao)}
-                      className="px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:opacity-90 transition"
+                      onClick={() => handleSuggestion(sugestao.replace(/[^\w\s]/g, '').trim())}
+                      className="px-4 py-2 text-sm rounded-lg bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:opacity-90 transition shadow-md hover:shadow-lg"
                     >
                       {sugestao}
                     </button>
                   ))}
+                  <button
+                    onClick={() => navigate('/cobranca-config')}
+                    className="px-4 py-2 text-sm rounded-lg bg-gradient-to-r from-green-500 to-teal-500 text-white hover:opacity-90 transition shadow-md hover:shadow-lg"
+                  >
+                    ⚙️ Configurar cobrança automática
+                  </button>
                 </div>
               </div>
             ) : (

@@ -1,30 +1,7 @@
 import requests
-from base64 import b64encode
 import logging
 from typing import List, Dict, Any, Optional
-
-# === CONFIGURAÇÕES ===
-subdominio = "cctcontrol"
-usuario = "cctcontrol-api"
-senha = "9SQ2MaNrFOeZOOuOAqeSRy7bYWYDDf85"  # senha atual da sua API
-
-BASE_URL = f"https://api.sienge.com.br/{subdominio}/public/api/v1"
-
-# Auth básico
-_token = b64encode(f"{usuario}:{senha}".encode()).decode()
-
-# Cabeçalhos padrão JSON
-json_headers = {
-    "Authorization": f"Basic {_token}",
-    "accept": "application/json",
-    "Content-Type": "application/json",
-}
-
-# Cabeçalho para PDF (corrigido)
-pdf_headers = {
-    "Authorization": f"Basic {_token}",
-    "accept": "*/*",  # ✅ Corrigido para evitar 406
-}
+from .sienge_config import BASE_URL, json_headers, pdf_headers
 
 logging.basicConfig(level=logging.INFO)
 

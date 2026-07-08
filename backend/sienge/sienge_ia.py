@@ -1,12 +1,18 @@
 # sienge/sienge_ia.py
 import logging
+import os
 from openai import OpenAI
 import pandas as pd
 
 logging.warning("🤖 Rodando módulo sienge_ia.py (análises automáticas de dados financeiros)")
 
 # ⚙️ Inicializa o cliente OpenAI — precisa da variável OPENAI_API_KEY configurada no Render
-client = OpenAI()
+client = None
+if os.getenv("OPENAI_API_KEY"):
+    client = OpenAI()
+    logging.info("✅ Cliente OpenAI inicializado")
+else:
+    logging.warning("⚠️ OPENAI_API_KEY não configurada - funcionalidades de IA estarão desabilitadas")
 
 # ==========================================================
 # 🔍 Função base de análise financeira (resumo executivo)
@@ -14,6 +20,8 @@ client = OpenAI()
 def gerar_analise_financeira(titulo: str, dados: pd.DataFrame) -> str:
     """Gera uma análise executiva com base no DataFrame de despesas/receitas."""
     try:
+        if not client:
+            return "⚠️ Funcionalidade de IA não disponível - configure OPENAI_API_KEY"
         if dados is None or len(dados) == 0:
             return "⚠️ Nenhum dado encontrado para análise."
 
@@ -61,6 +69,8 @@ def gerar_apresentacao_gamma(titulo: str, dados: pd.DataFrame) -> str:
     Ideal para ser exibida no dashboard Streamlit com st.markdown().
     """
     try:
+        if not client:
+            return "⚠️ Funcionalidade de IA não disponível - configure OPENAI_API_KEY"
         if dados is None or len(dados) == 0:
             return "⚠️ Nenhum dado encontrado para apresentação."
 

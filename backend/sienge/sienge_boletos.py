@@ -1,47 +1,116 @@
 import requests
 import logging
-from base64 import b64encode
+import re
+from .sienge_config import BASE_URL, json_headers
 
 # ============================================================
 # 🚀 IDENTIFICAÇÃO DA VERSÃO
 # ============================================================
-logging.warning("🚀 Rodando versão 1.8 do sienge_boletos.py (parcelas extras e tratamento de erro interno)")
-
-# ============================================================
-# 🔐 CONFIGURAÇÕES DE AUTENTICAÇÃO SIENGE
-# ============================================================
-subdominio = "cctcontrol"
-usuario = "cctcontrol-api"
-senha = "9SQ2MaNrFOeZOOuOAqeSRy7bYWYDDf85"
-
-BASE_URL = f"https://api.sienge.com.br/{subdominio}/public/api/v1"
-_token = b64encode(f"{usuario}:{senha}".encode()).decode()
-
-json_headers = {
-    "Authorization": f"Basic {_token}",
-    "accept": "application/json",
-    "Content-Type": "application/json",
-}
+logging.warning("🚀 Rodando versão 1.9 do sienge_boletos.py (com suporte a CNPJ)")
 
 # ============================================================
 # 👤 CLIENTE
 # ============================================================
-def buscar_cliente_por_cpf(cpf: str):
-    """Busca cliente no Sienge pelo CPF."""
-    url = f"{BASE_URL}/customers?cpf={cpf}"
-    logging.info(f"GET {url}")
+def detectar_documento_tipo(documento: str) -> str:
+    """Detecta se o documento é CPF ou CNPJ"""
+    # Remove caracteres não numéricos
+    doc_limpo = re.sub(r"\D", "", documento)
+    
+    if len(doc_limpo) == 11:
+        return "cpf"
+    elif len(doc_limpo) == 14:
+        return "cnpj"
+    else:
+        return "desconhecido"
+
+def buscar_cliente_por_documento(documento: str):
+    """Busca cliente no Sienge por CPF ou CNPJ."""
+    doc_limpo = re.sub(r"\D", "", documento)
+    tipo = detectar_documento_tipo(documento)
+    
+    logging.info(f"🔍 Buscando cliente com documento: {documento} (tipo: {tipo}, limpo: {doc_limpo})")
+    
+    # Tenta buscar por CPF primeiro
+    if tipo == "cpf":
+        url = f"{BASE_URL}/customers?cpf={doc_limpo}"
+        logging.info(f"GET {url} (busca por CPF)")
+        r = requests.get(url, headers=json_headers, timeout=30)
+        logging.info(f"{url} -> {r.status_code}")
+        logging.info(f"Resposta: {r.text[:500]}")
+        
+        if r.status_code == 200:
+            data = r.json()
+            results = data.get("results") or data
+            if isinstance(results, list) and len(results) > 0:
+                logging.info(f"✅ Cliente encontrado por CPF: {results[0].get('name')}")
+                return results[0]
+    
+    # Tenta buscar por CNPJ (tenta diferentes nomes de campo)
+    if tipo == "cnpj":
+        # Tenta campo 'cnpj'
+        url = f"{BASE_URL}/customers?cnpj={doc_limpo}"
+        logging.info(f"GET {url} (busca por CNPJ - campo cnpj)")
+        r = requests.get(url, headers=json_headers, timeout=30)
+        logging.info(f"{url} -> {r.status_code}")
+        logging.info(f"Resposta: {r.text[:500]}")
+        
+        if r.status_code == 200:
+            data = r.json()
+            results = data.get("results") or data
+            if isinstance(results, list) and len(results) > 0:
+                logging.info(f"✅ Cliente encontrado por CNPJ: {results[0].get('name')}")
+                return results[0]
+        
+        # Tenta campo 'federalTaxId'
+        url = f"{BASE_URL}/customers?federalTaxId={doc_limpo}"
+        logging.info(f"GET {url} (busca por CNPJ - campo federalTaxId)")
+        r = requests.get(url, headers=json_headers, timeout=30)
+        logging.info(f"{url} -> {r.status_code}")
+        logging.info(f"Resposta: {r.text[:500]}")
+        
+        if r.status_code == 200:
+            data = r.json()
+            results = data.get("results") or data
+            if isinstance(results, list) and len(results) > 0:
+                logging.info(f"✅ Cliente encontrado por federalTaxId: {results[0].get('name')}")
+                return results[0]
+    
+    # Se não encontrou pelo tipo específico, tenta buscar genérico e filtrar
+    url = f"{BASE_URL}/customers"
+    logging.info(f"GET {url} (busca genérica de todos clientes)")
     r = requests.get(url, headers=json_headers, timeout=30)
     logging.info(f"{url} -> {r.status_code}")
-
-    if r.status_code != 200:
-        logging.warning("Erro ao buscar cliente: %s", r.text)
-        return None
-
-    data = r.json()
-    results = data.get("results") or data
-    if isinstance(results, list) and len(results) > 0:
-        return results[0]
+    
+    if r.status_code == 200:
+        data = r.json()
+        results = data.get("results") or data
+        if isinstance(results, list):
+            logging.info(f"📊 Total de clientes para busca genérica: {len(results)}")
+            # Tenta encontrar cliente que contenha o documento em qualquer campo
+            for cliente in results:
+                # Verifica múltiplos campos possíveis
+                campos_para_verificar = [
+                    cliente.get("cpf", ""),
+                    cliente.get("cnpj", ""),
+                    cliente.get("federalTaxId", ""),
+                    cliente.get("taxId", ""),
+                    cliente.get("document", ""),
+                    cliente.get("identification", ""),
+                    str(cliente.get("id", "")),
+                ]
+                
+                for campo in campos_para_verificar:
+                    campo_limpo = re.sub(r"\D", "", str(campo))
+                    if doc_limpo in campo_limpo or campo_limpo in doc_limpo:
+                        logging.info(f"✅ Cliente encontrado via busca genérica: {cliente.get('name')} (campo: {campo})")
+                        return cliente
+    
+    logging.warning(f"❌ Cliente não encontrado com documento: {documento}")
     return None
+
+def buscar_cliente_por_cpf(cpf: str):
+    """Busca cliente no Sienge pelo CPF (mantido para compatibilidade)."""
+    return buscar_cliente_por_documento(cpf)
 
 
 # ============================================================
@@ -103,13 +172,13 @@ def boleto_existe(titulo_id: int, parcela_id: int) -> bool:
 
 
 # ============================================================
-# 🔍 BUSCAR BOLETOS POR CPF (CORRIGIDO E APRIMORADO)
+# 🔍 BUSCAR BOLETOS POR CPF/CNPJ (CORRIGIDO E APRIMORADO)
 # ============================================================
-def buscar_boletos_por_cpf(cpf: str):
-    """Busca apenas boletos realmente disponíveis para 2ª via (com logs detalhados)."""
-    cliente = buscar_cliente_por_cpf(cpf)
+def buscar_boletos_por_documento(documento: str):
+    """Busca apenas boletos realmente disponíveis para 2ª via (com logs detalhados). Suporta CPF e CNPJ."""
+    cliente = buscar_cliente_por_documento(documento)
     if not cliente:
-        return {"erro": "❌ Nenhum cliente encontrado com esse CPF."}
+        return {"erro": f"❌ Nenhum cliente encontrado com o documento {documento}."}
 
     nome = cliente.get("name")
     cid = cliente.get("id")
@@ -117,6 +186,10 @@ def buscar_boletos_por_cpf(cpf: str):
 
     boletos = listar_boletos_por_cliente(cid)
     logging.info(f"📊 Total de títulos retornados: {len(boletos)}")
+    
+    # Log detalhado de todos os títulos
+    for b in boletos:
+        logging.info(f"📋 Título ID: {b.get('id')} ou {b.get('receivableBillId')} | Valor: {b.get('amount') or b.get('receivableBillValue')} | Quitado: {b.get('payOffDate')}")
 
     if not boletos:
         return {"erro": f"📭 Nenhum boleto encontrado para {nome}."}
@@ -186,6 +259,10 @@ def buscar_boletos_por_cpf(cpf: str):
         "nome": nome,
         "boletos": lista
     }
+
+def buscar_boletos_por_cpf(cpf: str):
+    """Função de compatibilidade - usa buscar_boletos_por_documento."""
+    return buscar_boletos_por_documento(cpf)
 
 
 # ============================================================

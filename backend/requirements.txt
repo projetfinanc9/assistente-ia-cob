@@ -11,3 +11,4 @@ tabulate
 python-pptx
 python-multipart
 twilio
+apscheduler==3.10.4

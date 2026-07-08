@@ -3,9 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
+from typing import List, Optional
 import logging, re, base64, os
+import json
+from pathlib import Path
 import pandas as pd
 import requests  # <-- para chamar a API do WhatsApp Cloud
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 # Twilio
 from twilio.rest import Client
@@ -18,9 +23,14 @@ from sienge.sienge_pedidos import (
     reprovar_pedido,
     gerar_relatorio_pdf_bytes,
 )
-from sienge.sienge_boletos import buscar_boletos_por_cpf, gerar_link_boleto
+from sienge.sienge_boletos import buscar_boletos_por_documento, gerar_link_boleto
 from sienge.sienge_financeiro import gerar_relatorio_json
 from sienge.sienge_ia import gerar_analise_financeira
+from sienge.sienge_cobranca import (
+    verificar_boletos_vencendo,
+    gerar_mensagem_cobranca,
+    gerar_relatorio_cobrancas,
+)
 from dashboard_financeiro import gerar_relatorio_gamma
 
 # ============================================================
@@ -28,6 +38,31 @@ from dashboard_financeiro import gerar_relatorio_gamma
 # ============================================================
 logging.basicConfig(level=logging.INFO)
 app = FastAPI()
+
+# ============================================================
+# ⏰ SCHEDULER PARA COBRANÇAS AUTOMÁTICAS
+# ============================================================
+scheduler = AsyncIOScheduler()
+
+async def job_cobranca():
+    """Job agendado: verificar boletos vencendo baseado nas configurações"""
+    logging.info("🔔 Executando job de cobrança automática...")
+    try:
+        boletos = verificar_boletos_vencendo()
+        for boleto in boletos:
+            if boleto.get("cliente_telefone"):
+                mensagem = gerar_mensagem_cobranca(boleto)
+                # Enviar via WhatsApp Cloud API se configurado
+                if WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN:
+                    numero = re.sub(r"\D", "", boleto["cliente_telefone"])
+                    if numero.startswith("55"):
+                        send_whatsapp_cloud_message(numero, mensagem)
+        logging.info(f"✅ Job de cobrança concluído. {len(boletos)} boletos processados.")
+    except Exception as e:
+        logging.error(f"❌ Erro no job de cobrança: {e}")
+
+# Configurar job (executar diariamente às 9h)
+scheduler.add_job(job_cobranca, CronTrigger(hour=9, minute=0))
 
 app.add_middleware(
     CORSMiddleware,
@@ -39,7 +74,16 @@ os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ============================================================
-# 🔐 CONFIG TWILIO (WHATSAPP)
+# � EVENTO DE STARTUP
+# ============================================================
+@app.on_event("startup")
+async def startup_event():
+    """Inicia o scheduler quando o servidor sobe"""
+    scheduler.start()
+    logging.info("⏰ Scheduler iniciado - Jobs de cobrança automática ativos")
+
+# ============================================================
+# � CONFIG TWILIO (WHATSAPP)
 # ============================================================
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
@@ -72,6 +116,20 @@ WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "construai123")
 class Message(BaseModel):
     user: str
     text: str
+
+class SiengeConfig(BaseModel):
+    subdomain: str
+    username: str
+    password: str
+
+class LembreteCobranca(BaseModel):
+    dias_antes: int
+    mensagem: str
+    enviar_segunda_via: bool
+
+class ConfiguracaoCobranca(BaseModel):
+    ativo: bool
+    lembretes: List[LembreteCobranca]
 
 # ============================================================
 # 🧮 FUNÇÕES AUXILIARES
@@ -186,6 +244,8 @@ def entender_intencao(texto: str):
         return {"acao": "buscar_boletos_cpf"}
     if re.search(r"\d{11}|\d{3}\.\d{3}\.\d{3}-\d{2}", t):
         return {"acao": "cpf_digitado", "parametros": {"cpf": t}}
+    if re.search(r"\d{14}|\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}", t):
+        return {"acao": "cpf_digitado", "parametros": {"cpf": t}}
     if "confirmar" in t:
         return {"acao": "confirmar"}
     if "resumo" in t or "dre" in t or "resultado" in t:
@@ -198,6 +258,8 @@ def entender_intencao(texto: str):
         return {"acao": "analise_financeira"}
     if "apresentacao" in t or "slides" in t or "gamma" in t:
         return {"acao": "apresentacao_gamma"}
+    if "cobrança" in t or "cobranca" in t or "vencendo" in t:
+        return {"acao": "relatorio_cobrancas"}
     if "empresa" in t or re.search(r"\d{4}-\d{2}-\d{2}", t):
         return {"acao": "definir_filtros"}
     return {"acao": None}
@@ -239,6 +301,7 @@ async def mensagem(msg: Message):
         {"label": "💳 Segunda Via de Boletos", "action": "buscar_boletos_cpf"},
         {"label": "📊 Resumo Financeiro", "action": "resumo_financeiro"},
         {"label": "🏗️ Gastos por Obra", "action": "gastos_por_obra"},
+        {"label": "🔔 Relatório de Cobranças", "action": "relatorio_cobrancas"},
         {"label": "🎬 Relatório Gamma Dark Mode", "action": "apresentacao_gamma"},
     ]
 
@@ -252,36 +315,50 @@ async def mensagem(msg: Message):
 
     try:
         # ========================================================
-        # 💳 BOLETOS / CPF
+        # 💳 BOLETOS / CPF/CNPJ
         # ========================================================
         if acao == "cpf_digitado":
-            cpf = re.sub(r"\D", "", parametros.get("cpf", ""))
-            if len(cpf) != 11:
-                return {"text": "⚠️ CPF inválido. Digite novamente."}
-            resultado = buscar_boletos_por_cpf(cpf)
+            doc = re.sub(r"\D", "", parametros.get("cpf", ""))
+            doc_tipo = "CPF" if len(doc) == 11 else "CNPJ" if len(doc) == 14 else "documento"
+            if len(doc) not in [11, 14]:
+                return {"text": "⚠️ Documento inválido. Digite CPF (11 dígitos) ou CNPJ (14 dígitos)."}
+            resultado = buscar_boletos_por_documento(doc)
+            
+            if "erro" in resultado:
+                return {"text": resultado["erro"], "buttons": menu_inicial}
+            
             nome = resultado.get("nome", "Cliente não identificado")
-            usuarios_contexto[msg.user] = {"cpf": cpf, "nome": nome, "aguardando_confirmacao": True}
+            
+            # Se não encontrou boletos, ainda mostra o nome do cliente
+            if "boletos" not in resultado or not resultado["boletos"]:
+                usuarios_contexto[msg.user] = {"documento": doc, "nome": nome, "aguardando_confirmacao": True}
+                return {
+                    "text": f"🔎 Localizei o cliente *{nome}*.\n\n⚠️ Nenhum boleto disponível para segunda via no momento.",
+                    "buttons": menu_inicial,
+                }
+            
+            usuarios_contexto[msg.user] = {"documento": doc, "nome": nome, "aguardando_confirmacao": True}
             return {
                 "text": f"🔎 Localizei o cliente *{nome}*. Confirmar para listar as 2ª vias?",
                 "buttons": [
                     {"label": "✅ Confirmar", "action": "confirmar"},
-                    {"label": "❌ Corrigir CPF", "action": "buscar_boletos_cpf"},
+                    {"label": "❌ Corrigir documento", "action": "buscar_boletos_cpf"},
                 ],
             }
 
         if acao == "buscar_boletos_cpf":
-            return {"text": "💳 Digite o CPF do titular dos boletos.", "buttons": menu_inicial}
+            return {"text": "💳 Digite o CPF ou CNPJ do titular dos boletos.", "buttons": menu_inicial}
 
         # ========================================================
         # 💳 CONFIRMAR BOLETOS
         # ========================================================
         if texto.lower() == "confirmar" or acao == "confirmar":
             ctx = usuarios_contexto.get(msg.user, {})
-            cpf = ctx.get("cpf")
-            if not cpf:
-                return {"text": "⚠️ Nenhum CPF armazenado. Digite novamente.", "buttons": menu_inicial}
+            documento = ctx.get("documento")
+            if not documento:
+                return {"text": "⚠️ Nenhum documento armazenado. Digite novamente.", "buttons": menu_inicial}
 
-            resultado = buscar_boletos_por_cpf(cpf)
+            resultado = buscar_boletos_por_documento(documento)
             if "erro" in resultado:
                 return {"text": resultado["erro"], "buttons": menu_inicial}
 
@@ -385,6 +462,14 @@ async def mensagem(msg: Message):
             link = gerar_relatorio_gamma(df, dre, filtros, msg.user)
             return {
                 "text": f"🎬 Relatório Gamma (Dark Mode) gerado!\n\n[📊 Acessar Relatório]({link})",
+                "buttons": menu_inicial,
+            }
+        
+        if acao == "relatorio_cobrancas":
+            # Verificar boletos vencendo baseado nas configurações
+            relatorio = gerar_relatorio_cobrancas()
+            return {
+                "text": relatorio,
                 "buttons": menu_inicial,
             }
 
@@ -542,3 +627,158 @@ def teste_financeiro():
 @app.get("/")
 def root():
     return {"ok": True, "service": "constru-ai-connect", "status": "running"}
+
+# ============================================================
+# ⚙️ ENDPOINTS DE CONFIGURAÇÃO SIENGE
+# ============================================================
+@app.get("/config")
+def get_config():
+    """Retorna configurações atuais do Sienge"""
+    from sienge.sienge_config import subdominio, usuario
+    # Não retornamos a senha por segurança
+    return {
+        "subdomain": subdominio,
+        "username": usuario,
+        "password": ""  # Não expor a senha
+    }
+
+@app.post("/config")
+def save_config(config: SiengeConfig):
+    """Salva novas configurações do Sienge"""
+    try:
+        # Salva no arquivo JSON
+        from sienge.sienge_config import salvar_configuracoes
+        sucesso = salvar_configuracoes(config.subdomain, config.username, config.password)
+        
+        if not sucesso:
+            return {"success": False, "error": "Erro ao salvar configurações no arquivo"}
+        
+        # Atualizar variáveis de ambiente
+        os.environ["SIENGE_SUBDOMINIO"] = config.subdomain
+        os.environ["SIENGE_USUARIO"] = config.username
+        os.environ["SIENGE_SENHA"] = config.password
+        
+        # Recarregar configurações
+        import importlib
+        from sienge import sienge_config
+        importlib.reload(sienge_config)
+        
+        # Recarregar todos os módulos que dependem do sienge_config
+        from sienge import sienge_boletos, sienge_pedidos, sienge_financeiro, sienge_cobranca
+        importlib.reload(sienge_boletos)
+        importlib.reload(sienge_pedidos)
+        importlib.reload(sienge_financeiro)
+        importlib.reload(sienge_cobranca)
+        
+        logging.info(f"✅ Configurações atualizadas e persistidas: {config.subdomain}")
+        return {"success": True, "message": "Configurações salvas com sucesso"}
+    except Exception as e:
+        logging.error(f"❌ Erro ao salvar configurações: {e}")
+        return {"success": False, "error": str(e)}
+
+# ============================================================
+# 🔔 CONFIGURAÇÕES DE COBRANÇA AUTOMÁTICA
+# ============================================================
+COBRANCA_CONFIG_FILE = Path(__file__).parent / "cobranca_config.json"
+
+def carregar_configuracao_cobranca():
+    """Carrega configurações de cobrança do arquivo JSON"""
+    if COBRANCA_CONFIG_FILE.exists():
+        try:
+            with open(COBRANCA_CONFIG_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            logging.warning(f"⚠️ Erro ao carregar configuração de cobrança: {e}")
+    # Configuração padrão
+    return {
+        "ativo": False,
+        "lembretes": [
+            {
+                "dias_antes": 5,
+                "mensagem": "Olá {cliente}, seu boleto vence em {dias} dias. Valor: R$ {valor}",
+                "enviar_segunda_via": True
+            },
+            {
+                "dias_antes": 1,
+                "mensagem": "Olá {cliente}, seu boleto vence amanhã! Valor: R$ {valor}",
+                "enviar_segunda_via": True
+            }
+        ]
+    }
+
+def salvar_configuracao_cobranca(config: dict):
+    """Salva configurações de cobrança no arquivo JSON"""
+    try:
+        with open(COBRANCA_CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+        logging.info(f"✅ Configuração de cobrança salva")
+        return True
+    except Exception as e:
+        logging.error(f"❌ Erro ao salvar configuração de cobrança: {e}")
+        return False
+
+@app.get("/cobranca-config")
+def get_cobranca_config():
+    """Retorna configurações atuais de cobrança automática"""
+    config = carregar_configuracao_cobranca()
+    return config
+
+@app.post("/cobranca-config")
+def save_cobranca_config(config: ConfiguracaoCobranca):
+    """Salva novas configurações de cobrança automática"""
+    try:
+        config_dict = {
+            "ativo": config.ativo,
+            "lembretes": [
+                {
+                    "dias_antes": l.dias_antes,
+                    "mensagem": l.mensagem,
+                    "enviar_segunda_via": l.enviar_segunda_via
+                }
+                for l in config.lembretes
+            ]
+        }
+        
+        sucesso = salvar_configuracao_cobranca(config_dict)
+        if not sucesso:
+            return {"success": False, "error": "Erro ao salvar configurações"}
+        
+        # Recarregar módulo de cobrança
+        import importlib
+        from sienge import sienge_cobranca
+        importlib.reload(sienge_cobranca)
+        
+        logging.info(f"✅ Configuração de cobrança atualizada")
+        return {"success": True, "message": "Configurações de cobrança salvas com sucesso"}
+    except Exception as e:
+        logging.error(f"❌ Erro ao salvar configuração de cobrança: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.post("/test-sienge")
+def test_sienge_connection(config: SiengeConfig):
+    """Testa conexão com o Sienge usando as configurações fornecidas"""
+    try:
+        from base64 import b64encode
+        import requests
+        
+        BASE_URL = f"https://api.sienge.com.br/{config.subdomain}/public/api/v1"
+        _token = b64encode(f"{config.username}:{config.password}".encode()).decode()
+        
+        headers = {
+            "Authorization": f"Basic {_token}",
+            "accept": "application/json",
+            "Content-Type": "application/json",
+        }
+        
+        # Testar conexão buscando clientes
+        response = requests.get(f"{BASE_URL}/customers", headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            return {"success": True, "message": "Conexão estabelecida com sucesso"}
+        elif response.status_code == 401:
+            return {"success": False, "error": "Credenciais inválidas"}
+        else:
+            return {"success": False, "error": f"Erro na conexão: {response.status_code}"}
+    except Exception as e:
+        logging.error(f"❌ Erro ao testar conexão: {e}")
+        return {"success": False, "error": str(e)}
