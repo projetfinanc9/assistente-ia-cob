@@ -36,10 +36,8 @@ const Index = () => {
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
 
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
-
     try {
-      const response = await fetch(`${API_URL}/mensagem`, {
+      const response = await fetch("http://localhost:8000/mensagem", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
