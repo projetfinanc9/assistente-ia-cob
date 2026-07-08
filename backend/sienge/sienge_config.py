@@ -43,12 +43,13 @@ def salvar_configuracoes(subdomain: str, username: str, password: str):
 # ============================================================
 # 🔐 CONFIGURAÇÕES DE AUTENTICAÇÃO SIENGE
 # ============================================================
-# Carrega configurações salvas ou usa variáveis de ambiente
-config_salva = carregar_configuracoes()
+# Prioriza variáveis de ambiente sobre arquivo de configuração
+subdominio = os.getenv("SIENGE_SUBDOMINIO") or config_salva.get("subdomain") or "cctcontrol"
+usuario = os.getenv("SIENGE_USERNAME") or config_salva.get("username") or "cctcontrol-api"
+senha = os.getenv("SIENGE_PASSWORD") or config_salva.get("password") or "9SQ2MaNrFOeZOOuOAqeSRy7bYWYDDf85"
 
-subdominio = config_salva.get("subdomain") or os.getenv("SIENGE_SUBDOMINIO", "cctcontrol")
-usuario = config_salva.get("username") or os.getenv("SIENGE_USUARIO", "cctcontrol-api")
-senha = config_salva.get("password") or os.getenv("SIENGE_SENHA", "9SQ2MaNrFOeZOOuOAqeSRy7bYWYDDf85")
+logging.info(f"🔧 Configurações Sienge - Subdomain: {subdominio}, User: {usuario}")
+logging.info(f"🔧 Variáveis de ambiente: SUBDOMAIN={os.getenv('SIENGE_SUBDOMINIO')}, USERNAME={os.getenv('SIENGE_USERNAME')}, PASSWORD={'***' if os.getenv('SIENGE_PASSWORD') else 'None'}")
 
 BASE_URL = f"https://api.sienge.com.br/{subdominio}/public/api/v1"
 _token = b64encode(f"{usuario}:{senha}".encode()).decode()
