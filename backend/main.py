@@ -375,7 +375,7 @@ async def testar_cobranca():
         logging.warning(f"🧪 Teste concluído: {len(resultados)} resultados")
         return {
             "total_boletos": len(boletos),
-            "enviados": len([r for r in resultados if r.get("status") == "enviado"]]),
+            "enviados": len([r for r in resultados if r.get("status") == "enviado"]),
             "resultados": resultados
         }
     except Exception as e:
