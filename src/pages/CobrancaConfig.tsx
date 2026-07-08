@@ -42,8 +42,9 @@ const CobrancaConfig = () => {
   }, []);
 
   const loadConfig = async () => {
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
     try {
-      const response = await fetch('http://localhost:8000/cobranca-config');
+      const response = await fetch(`${API_URL}/cobranca-config`);
       const data = await response.json();
       setConfig(data);
     } catch (error) {
@@ -56,8 +57,9 @@ const CobrancaConfig = () => {
   const saveConfig = async () => {
     setSaving(true);
     setMessage('');
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
     try {
-      const response = await fetch('http://localhost:8000/cobranca-config', {
+      const response = await fetch(`${API_URL}/cobranca-config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
@@ -229,10 +231,10 @@ const CobrancaConfig = () => {
               <CardTitle>Variáveis Disponíveis</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              <p><code>{cliente}</code> - Nome do cliente</p>
-              <p><code>{dias}</code> - Dias até o vencimento</p>
-              <p><code>{valor}</code> - Valor do boleto</p>
-              <p><code>{vencimento}</code> - Data de vencimento</p>
+              <p><code>{"{cliente}"}</code> - Nome do cliente</p>
+              <p><code>{"{dias}"}</code> - Dias até o vencimento</p>
+              <p><code>{"{valor}"}</code> - Valor do boleto</p>
+              <p><code>{"{vencimento}"}</code> - Data de vencimento</p>
             </CardContent>
           </Card>
         </div>
