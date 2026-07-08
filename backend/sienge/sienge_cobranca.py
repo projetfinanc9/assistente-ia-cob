@@ -123,13 +123,13 @@ def verificar_boletos_vencendo() -> List[Dict]:
         logging.info("⚠️ Nenhum lembrete configurado")
         return []
     
-    logging.info(f"🔍 Verificando boletos com {len(lembretes)} lembretes configurados...")
+    logging.warning(f"🔍 Verificando boletos com {len(lembretes)} lembretes configurados...")
     
     # Log dos lembretes configurados
     for i, lem in enumerate(lembretes):
         dias = lem.get("dias_antes", 0)
         data = datetime.now() + timedelta(days=dias)
-        logging.info(f"📅 Lembrete {i+1}: dias_antes={dias}, data_alvo={data.date()}")
+        logging.warning(f"📅 Lembrete {i+1}: dias_antes={dias}, data_alvo={data.date()}")
     
     # Buscar todos os clientes
     url = f"{BASE_URL}/customers"
@@ -139,7 +139,7 @@ def verificar_boletos_vencendo() -> List[Dict]:
         return []
     
     clientes = r.json().get("results", [])
-    logging.info(f"📊 Total de clientes: {len(clientes)}")
+    logging.warning(f"📊 Total de clientes: {len(clientes)}")
     
     boletos_vencendo = []
     
@@ -152,23 +152,23 @@ def verificar_boletos_vencendo() -> List[Dict]:
         if not cliente_id:
             continue
         
-        logging.info(f"👤 Processando cliente: {cliente_nome} (ID: {cliente_id})")
+        logging.warning(f"👤 Processando cliente: {cliente_nome} (ID: {cliente_id})")
         
         # Buscar boletos do cliente
         boletos = listar_boletos_por_cliente(cliente_id)
-        logging.info(f"📄 Cliente {cliente_nome}: {len(boletos)} boletos encontrados")
+        logging.warning(f"📄 Cliente {cliente_nome}: {len(boletos)} boletos encontrados")
         
         for boleto in boletos:
             titulo_id = boleto.get("id")
             quitado = boleto.get("payOffDate")
             
             if quitado:
-                logging.info(f"⏭️ Título {titulo_id} já quitado, ignorando")
+                logging.warning(f"⏭️ Título {titulo_id} já quitado, ignorando")
                 continue  # Pular boletos já quitados
             
             # Buscar parcelas
             parcelas = listar_parcelas(titulo_id)
-            logging.info(f"📦 Título {titulo_id}: {len(parcelas)} parcelas")
+            logging.warning(f"📦 Título {titulo_id}: {len(parcelas)} parcelas")
             
             for parcela in parcelas:
                 vencimento_str = parcela.get("dueDate")
@@ -180,7 +180,7 @@ def verificar_boletos_vencendo() -> List[Dict]:
                 except:
                     continue
                 
-                logging.info(f"📅 Parcela {parcela.get('id')}: vencimento={vencimento.date()}")
+                logging.warning(f"📅 Parcela {parcela.get('id')}: vencimento={vencimento.date()}")
                 
                 # Verificar se vence em algum dos períodos configurados
                 for lembrete in lembretes:
@@ -189,7 +189,7 @@ def verificar_boletos_vencendo() -> List[Dict]:
                     
                     # Verifica se vence exatamente no dia configurado
                     if vencimento.date() == data_limite.date():
-                        logging.info(f"✅ MATCH! Boleto {titulo_id}/{parcela.get('id')} vence em {dias_antes} dias")
+                        logging.warning(f"✅ MATCH! Boleto {titulo_id}/{parcela.get('id')} vence em {dias_antes} dias")
                         boletos_vencendo.append({
                             "cliente_nome": cliente_nome,
                             "cliente_cpf": cliente_cpf,
@@ -202,7 +202,7 @@ def verificar_boletos_vencendo() -> List[Dict]:
                             "mensagem_template": lembrete.get("mensagem"),
                             "enviar_segunda_via": lembrete.get("enviar_segunda_via", False)
                         })
-                        logging.info(f"✅ Boleto encontrado: {cliente_nome} - Vence em {dias_antes} dias")
+                        logging.warning(f"✅ Boleto encontrado: {cliente_nome} - Vence em {dias_antes} dias")
     
     logging.info(f"📊 Total de boletos para cobrança: {len(boletos_vencendo)}")
     return boletos_vencendo
