@@ -27,8 +27,9 @@ const Settings = () => {
   }, []);
 
   const loadConfig = async () => {
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
     try {
-      const response = await fetch("http://localhost:8000/config");
+      const response = await fetch(`${API_URL}/config`);
       if (response.ok) {
         const data = await response.json();
         setConfig({
@@ -45,9 +46,10 @@ const Settings = () => {
   const handleSave = async () => {
     setIsLoading(true);
     setSaveStatus("idle");
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
     try {
-      const response = await fetch("http://localhost:8000/config", {
+      const response = await fetch(`${API_URL}/config`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(config),
@@ -69,8 +71,9 @@ const Settings = () => {
 
   const handleTestConnection = async () => {
     setIsLoading(true);
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
     try {
-      const response = await fetch("http://localhost:8000/test-sienge", {
+      const response = await fetch(`${API_URL}/test-sienge`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(config),
