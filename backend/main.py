@@ -40,6 +40,23 @@ logging.basicConfig(level=logging.INFO)
 app = FastAPI()
 
 # ============================================================
+# 🌐 CONFIGURAÇÃO CORS
+# ============================================================
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:8080",
+        "http://localhost:5173",
+        "https://constru-ai-connect.lovable.app",
+        "https://constru-ai-connect-prwx.onrender.com",
+        "*"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ============================================================
 # ⏰ SCHEDULER PARA COBRANÇAS AUTOMÁTICAS
 # ============================================================
 scheduler = AsyncIOScheduler()
@@ -64,17 +81,11 @@ async def job_cobranca():
 # Configurar job (executar diariamente às 9h)
 scheduler.add_job(job_cobranca, CronTrigger(hour=9, minute=0))
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], allow_credentials=True,
-    allow_methods=["*"], allow_headers=["*"],
-)
-
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ============================================================
-# � EVENTO DE STARTUP
+# 🚀 EVENTO DE STARTUP
 # ============================================================
 @app.on_event("startup")
 async def startup_event():
@@ -83,7 +94,7 @@ async def startup_event():
     logging.info("⏰ Scheduler iniciado - Jobs de cobrança automática ativos")
 
 # ============================================================
-# � CONFIG TWILIO (WHATSAPP)
+# 🔐 CONFIG TWILIO (WHATSAPP)
 # ============================================================
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
