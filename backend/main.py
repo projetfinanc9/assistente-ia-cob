@@ -516,10 +516,11 @@ async def verify_whatsapp(request: Request):
 # ============================================================
 # 💬 WEBHOOK WHATSAPP CLOUD API (RECEBIMENTO)
 # ============================================================
-def send_whatsapp_cloud_message(to_number: str, body: str):
+def send_whatsapp_cloud_message(to_number: str, body: str, buttons: list = None):
     """
     Envia mensagem de texto usando WhatsApp Cloud API.
     to_number: número sem 'whatsapp:', ex: 559193808761
+    buttons: lista de botões interativos
     """
     if not (WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN):
         logging.error("❌ WHATSAPP_PHONE_NUMBER_ID ou WHATSAPP_TOKEN não configurados.")
@@ -530,16 +531,47 @@ def send_whatsapp_cloud_message(to_number: str, body: str):
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
         "Content-Type": "application/json",
     }
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": to_number,
-        "type": "text",
-        "text": {"body": body},
-    }
+    
+    # Se houver botões, usa mensagem interativa
+    if buttons and len(buttons) > 0:
+        # WhatsApp suporta até 3 botões
+        button_items = buttons[:3]
+        
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to_number,
+            "type": "interactive",
+            "interactive": {
+                "type": "button",
+                "body": {
+                    "text": body
+                },
+                "action": {
+                    "buttons": [
+                        {
+                            "type": "reply",
+                            "reply": {
+                                "id": f"btn_{i}",
+                                "title": btn["label"][:20]  # WhatsApp limita a 20 caracteres
+                            }
+                        }
+                        for i, btn in enumerate(button_items)
+                    ]
+                }
+            }
+        }
+    else:
+        # Mensagem de texto simples
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to_number,
+            "type": "text",
+            "text": {"body": body},
+        }
 
     try:
         resp = requests.post(url, headers=headers, json=payload)
-        logging.info(f"📤 Enviando mensagem Cloud API → {to_number}: {body}")
+        logging.info(f"📤 Enviando mensagem Cloud API → {to_number}: {body[:100]}...")
         logging.info(f"Resposta Meta: {resp.status_code} - {resp.text}")
     except Exception as e:
         logging.error(f"❌ Erro ao enviar mensagem via Cloud API: {e}")
@@ -568,16 +600,29 @@ async def webhook_whatsapp(request: Request):
 
         msg = messages[0]
         from_number = msg.get("from")             # ex: "559193808761"
-        text = msg.get("text", {}).get("body", "")
+        
+        # Verifica se é uma resposta de botão interativo
+        interactive = msg.get("interactive")
+        if interactive and interactive.get("type") == "button_reply":
+            button_reply = interactive.get("button_reply", {})
+            button_id = button_reply.get("id", "")
+            button_title = button_reply.get("title", "")
+            text = button_title  # Usa o título do botão como texto
+            logging.info(f"🔘 Botão clicado: {button_id} - {button_title}")
+        else:
+            text = msg.get("text", {}).get("body", "")
 
         user_id = f"whatsapp:{from_number}"
 
         # Usa a MESMA lógica do backend normal
         resposta_construia = await mensagem(Message(user=user_id, text=text))
         texto_resposta = resposta_construia.get("text", "Constru.IA: não consegui gerar resposta.")
+        
+        # Passa os botões para a função de envio
+        botoes = resposta_construia.get("buttons", [])
 
-        # Envia resposta via Cloud API
-        send_whatsapp_cloud_message(from_number, texto_resposta)
+        # Envia resposta via Cloud API com botões
+        send_whatsapp_cloud_message(from_number, texto_resposta, botoes)
 
     except Exception as e:
         logging.exception("❌ Erro ao processar webhook WhatsApp:")
