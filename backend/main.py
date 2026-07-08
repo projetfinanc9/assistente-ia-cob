@@ -27,6 +27,7 @@ from sienge.sienge_cobranca import (
 # 🚀 CONFIGURAÇÃO DO SERVIDOR FASTAPI
 # ============================================================
 logging.basicConfig(level=logging.INFO)
+logging.warning("🔄 MAIN.PY CARREGADO - VERSÃO COM LOGS WARNING NO TESTAR-COBRANCA")
 app = FastAPI()
 
 # ============================================================
