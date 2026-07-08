@@ -331,11 +331,11 @@ async def testar_cobranca():
     """
     Endpoint para testar manualmente o sistema de cobrança
     """
-    logging.info("🧪 Iniciando teste manual de cobrança...")
-    logging.info("🧪 Chamando verificar_boletos_vencendo()...")
+    logging.warning("🧪 Iniciando teste manual de cobrança...")
+    logging.warning("🧪 Chamando verificar_boletos_vencendo()...")
     try:
         boletos = verificar_boletos_vencendo()
-        logging.info(f"📋 verificar_boletos_vencendo() retornou {len(boletos)} boletos")
+        logging.warning(f"📋 verificar_boletos_vencendo() retornou {len(boletos)} boletos")
         
         resultados = []
         for boleto in boletos:
@@ -371,10 +371,10 @@ async def testar_cobranca():
                     "status": "sem telefone",
                 })
         
-        logging.info(f"🧪 Teste concluído: {len(resultados)} resultados")
+        logging.warning(f"🧪 Teste concluído: {len(resultados)} resultados")
         return {
             "total_boletos": len(boletos),
-            "enviados": len([r for r in resultados if r.get("status") == "enviado"]),
+            "enviados": len([r for r in resultados if r.get("status") == "enviado"]]),
             "resultados": resultados
         }
     except Exception as e:
