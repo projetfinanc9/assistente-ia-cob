@@ -16,22 +16,12 @@ from apscheduler.triggers.cron import CronTrigger
 from twilio.rest import Client
 
 # === MÓDULOS LOCAIS ===
-from sienge.sienge_pedidos import (
-    listar_pedidos_pendentes,
-    itens_pedido,
-    autorizar_pedido,
-    reprovar_pedido,
-    gerar_relatorio_pdf_bytes,
-)
 from sienge.sienge_boletos import buscar_boletos_por_documento, gerar_link_boleto
-from sienge.sienge_financeiro import gerar_relatorio_json
-from sienge.sienge_ia import gerar_analise_financeira
 from sienge.sienge_cobranca import (
     verificar_boletos_vencendo,
     gerar_mensagem_cobranca,
     gerar_relatorio_cobrancas,
 )
-from dashboard_financeiro import gerar_relatorio_gamma
 
 # ============================================================
 # 🚀 CONFIGURAÇÃO DO SERVIDOR FASTAPI
@@ -153,101 +143,14 @@ def money(v):
 
 usuarios_contexto = {}
 
-def extrair_periodo(texto: str):
-    datas = re.findall(r"\d{4}-\d{2}-\d{2}", texto)
-    if len(datas) >= 2:
-        return {"startDate": datas[0], "endDate": datas[1]}
-    if len(datas) == 1:
-        return {"startDate": datas[0]}
-    return {}
-
-def extrair_empresa(texto: str):
-    m = re.search(r"empresa\s+(\d+)", texto)
-    if m:
-        return {"enterpriseId": m.group(1)}
-    return {}
-
-def filtros_do_usuario(user: str):
-    return usuarios_contexto.get(user, {}).get("filtros", {})
-
-def atualizar_filtros(user: str, novos: dict):
-    ctx = usuarios_contexto.setdefault(user, {})
-    atuais = ctx.get("filtros", {})
-    atuais.update({k: v for k, v in novos.items() if v})
-    ctx["filtros"] = atuais
-    return atuais
-
 # ============================================================
-# 🔎 HELPERS FINANCEIROS EM CIMA DO gerar_relatorio_json
-# ============================================================
-def resumo_financeiro(**filtros) -> str:
-    rel = gerar_relatorio_json(**filtros)
-    dre_fmt = rel.get("dre", {}).get("formatado", {})
-    if not dre_fmt:
-        return "⚠️ Sem dados para o período/empresa informados."
-
-    receita = dre_fmt.get("Receita Líquida") or dre_fmt.get("Receita", 0)
-    custos = dre_fmt.get("Custo") or dre_fmt.get("Custos", 0)
-    despesas = dre_fmt.get("Despesas") or dre_fmt.get("Despesas Operacionais", 0)
-    resultado = dre_fmt.get("Lucro Líquido") or dre_fmt.get("Resultado", 0)
-
-    linhas = [
-        "📊 *Resumo Financeiro (DRE)*",
-        f"• Receita: {money(receita)}",
-        f"• Custos: {money(custos)}",
-        f"• Despesas: {money(despesas)}",
-        f"• Resultado: {money(resultado)}",
-    ]
-    return "\n".join(linhas)
-
-def gastos_por_obra(**filtros) -> str:
-    rel = gerar_relatorio_json(**filtros)
-    obras = rel.get("por_obra") or rel.get("gastos_por_obra") or []
-    if not obras:
-        return "⚠️ Nenhum gasto por obra encontrado."
-
-    linhas = ["🏗️ *Gastos por obra*"]
-    for o in obras[:20]:
-        nome = o.get("obra") or o.get("obra_nome") or o.get("descricao") or "-"
-        valor = o.get("valor") or o.get("total") or 0
-        linhas.append(f"• {nome}: {money(valor)}")
-    return "\n".join(linhas)
-
-def gastos_por_centro_custo(**filtros) -> str:
-    rel = gerar_relatorio_json(**filtros)
-    centros = rel.get("por_centro_custo") or rel.get("gastos_por_centro_custo") or []
-    if not centros:
-        return "⚠️ Nenhum gasto por centro de custo encontrado."
-
-    linhas = ["📂 *Gastos por centro de custo*"]
-    for c in centros[:20]:
-        nome = c.get("centro_custo") or c.get("descricao") or "-"
-        valor = c.get("valor") or c.get("total") or 0
-        linhas.append(f"• {nome}: {money(valor)}")
-    return "\n".join(linhas)
-
-# ============================================================
-# 🧠 INTERPRETAÇÃO DE INTENÇÃO
+#  INTERPRETAÇÃO DE INTENÇÃO
 # ============================================================
 def entender_intencao(texto: str):
     t = (texto or "").strip().lower()
 
     if t in ["oi", "ola", "olá", "bom dia", "boa tarde", "boa noite"]:
         return {"acao": "saudacao"}
-    if "pedido" in t and "pendente" in t:
-        return {"acao": "listar_pedidos_pendentes"}
-    if re.search(r"itens\s+do\s+pedido\s+\d+", t):
-        pid = re.findall(r"\d+", t)[-1]
-        return {"acao": "itens_pedido", "parametros": {"pedido_id": int(pid)}}
-    if "autorizar pedido" in t:
-        pid = re.findall(r"\d+", t)[-1]
-        return {"acao": "autorizar_pedido", "parametros": {"pedido_id": int(pid)}}
-    if "reprovar pedido" in t:
-        pid = re.findall(r"\d+", t)[-1]
-        return {"acao": "reprovar_pedido", "parametros": {"pedido_id": int(pid)}}
-    if "pdf" in t or "relatorio" in t or "relatório" in t:
-        nums = re.findall(r"\d+", t)
-        return {"acao": "relatorio_pdf", "parametros": {"pedido_id": int(nums[-1])}} if nums else {}
     if "segunda via" in t or "boleto" in t:
         nums = re.findall(r"\d+", t)
         if len(nums) >= 2:
@@ -259,20 +162,8 @@ def entender_intencao(texto: str):
         return {"acao": "cpf_digitado", "parametros": {"cpf": t}}
     if "confirmar" in t:
         return {"acao": "confirmar"}
-    if "resumo" in t or "dre" in t or "resultado" in t:
-        return {"acao": "resumo_financeiro"}
-    if "gasto" in t and "obra" in t:
-        return {"acao": "gastos_por_obra"}
-    if "centro de custo" in t:
-        return {"acao": "gastos_por_centro_custo"}
-    if "análise" in t or "analise" in t:
-        return {"acao": "analise_financeira"}
-    if "apresentacao" in t or "slides" in t or "gamma" in t:
-        return {"acao": "apresentacao_gamma"}
     if "cobrança" in t or "cobranca" in t or "vencendo" in t:
         return {"acao": "relatorio_cobrancas"}
-    if "empresa" in t or re.search(r"\d{4}-\d{2}-\d{2}", t):
-        return {"acao": "definir_filtros"}
     return {"acao": None}
 
 # ============================================================
@@ -283,44 +174,20 @@ async def mensagem(msg: Message):
     logging.info(f"📩 Mensagem recebida: {msg.user} -> {msg.text}")
     texto = (msg.text or "").strip()
 
-    # Atualiza filtros
-    if "empresa" in texto.lower() or re.search(r"\d{4}-\d{2}-\d{2}", texto):
-        novos = {}
-        novos.update(extrair_periodo(texto))
-        novos.update(extrair_empresa(texto))
-        if novos:
-            atualizados = atualizar_filtros(msg.user, novos)
-            return {
-                "text": "🧭 Filtros definidos.\n"
-                        + (f"• Início: {atualizados.get('startDate')}\n" if atualizados.get("startDate") else "")
-                        + (f"• Fim: {atualizados.get("endDate")}\n" if atualizados.get("endDate") else "")
-                        + (f"• Empresa: {atualizados.get('enterpriseId')}\n" if atualizados.get("enterpriseId") else ""),
-                "buttons": [
-                    {"label": "📊 Resumo Financeiro", "action": "resumo_financeiro"},
-                    {"label": "🏗️ Gastos por Obra", "action": "gastos_por_obra"},
-                    {"label": "📂 Gastos por Centro de Custo", "action": "gastos_por_centro_custo"},
-                ],
-            }
-
     intencao = entender_intencao(texto)
     acao = intencao.get("acao")
     parametros = intencao.get("parametros", {}) or {}
-    filtros = filtros_do_usuario(msg.user)
 
     menu_inicial = [
-        {"label": "📋 Pedidos Pendentes", "action": "listar_pedidos_pendentes"},
         {"label": "💳 Segunda Via de Boletos", "action": "buscar_boletos_cpf"},
-        {"label": "📊 Resumo Financeiro", "action": "resumo_financeiro"},
-        {"label": "🏗️ Gastos por Obra", "action": "gastos_por_obra"},
-        {"label": "🔔 Relatório de Cobranças", "action": "relatorio_cobrancas"},
-        {"label": "🎬 Relatório Gamma Dark Mode", "action": "apresentacao_gamma"},
+        {"label": " Relatório de Cobranças", "action": "relatorio_cobrancas"},
     ]
 
-    if not texto or acao == "saudacao":
+    if not texto or acao == "saudacao" or acao == "menu_inicial":
         return {
             "text": "👋 Olá! Sou a Constru.IA.\n"
-                    "Posso te ajudar com: Pedidos, Boletos, Resumo Financeiro, Gastos e Relatórios com IA.\n"
-                    "Dica: defina filtros com: `empresa 1 2024-01-01 a 2024-12-31`",
+                    "Posso te ajudar com: Segunda via de boletos e Relatório de cobranças.\n"
+                    "Digite seu CPF ou CNPJ para começar.",
             "buttons": menu_inicial,
         }
 
@@ -378,6 +245,33 @@ async def mensagem(msg: Message):
             if not boletos:
                 return {"text": f"📭 Nenhum boleto disponível para {nome}.", "buttons": menu_inicial}
 
+            # Se houver muitos boletos, usa list message
+            if len(boletos) > 3:
+                list_items = []
+                for b in boletos[:10]:  # Limite de 10 itens
+                    titulo, parcela = b["titulo_id"], b["parcela_id"]
+                    valor, venc, desc = b.get("valor", 0.0), b.get("vencimento"), b.get("descricao", "-")
+                    list_items.append({
+                        "titulo_id": titulo,
+                        "parcela_id": parcela,
+                        "title": f"Boleto {titulo}/{parcela}",
+                        "description": f"R$ {valor:,.2f} - Venc: {venc}"
+                    })
+                
+                # Armazena boletos no contexto para recuperar quando selecionar
+                usuarios_contexto[msg.user] = {
+                    "documento": documento,
+                    "nome": nome,
+                    "boletos_disponiveis": list_items
+                }
+                
+                return {
+                    "text": f"✅ *Encontrei {len(boletos)} boletos para {nome}.*\n\nSelecione um boleto abaixo para gerar a segunda via:",
+                    "list_items": list_items,
+                    "buttons": [{"label": "⬅️ Voltar ao menu", "action": "menu_inicial"}],
+                }
+            
+            # Se houver poucos boletos, usa botões
             linhas, botoes = [], []
             for b in boletos:
                 titulo, parcela = b["titulo_id"], b["parcela_id"]
@@ -401,8 +295,7 @@ async def mensagem(msg: Message):
                 "buttons": botoes
                 + [
                     {"label": "💳 Nova busca por CPF", "action": "buscar_boletos_cpf"},
-                    {"label": "📋 Pedidos Pendentes", "action": "listar_pedidos_pendentes"},
-                    {"label": "📊 Resumo Financeiro", "action": "resumo_financeiro"},
+                    {"label": "⬅️ Voltar ao menu", "action": "menu_inicial"},
                 ],
             }
 
@@ -411,71 +304,8 @@ async def mensagem(msg: Message):
             return {"text": gerar_link_boleto(t, p), "buttons": menu_inicial}
 
         # ========================================================
-        # 📦 PEDIDOS
+        # 🔔 COBRANÇA
         # ========================================================
-        if acao == "listar_pedidos_pendentes":
-            pedidos = listar_pedidos_pendentes()
-            if not pedidos:
-                return {"text": "📭 Nenhum pedido pendente."}
-            linhas = [f"📦 Pedido {p['id']} — {money(p.get('totalAmount', 0))}" for p in pedidos]
-            botoes = [{"label": f"Itens {p['id']}", "action": f"itens do pedido {p['id']}"} for p in pedidos]
-            return {"text": "\n".join(linhas), "buttons": botoes}
-
-        if acao == "itens_pedido":
-            pid = parametros.get("pedido_id")
-            itens = itens_pedido(pid)
-            linhas = [f"• {i.get('description', 'Item')} — {money(i.get('totalAmount', 0))}" for i in itens]
-            return {
-                "text": f"📦 Itens do pedido {pid}:\n" + "\n".join(linhas),
-                "buttons": [
-                    {"label": "✅ Autorizar", "action": f"autorizar pedido {pid}"},
-                    {"label": "❌ Reprovar", "action": f"reprovar pedido {pid}"},
-                    {"label": "📄 PDF", "action": f"gerar pdf pedido {pid}"},
-                ],
-            }
-
-        if acao == "autorizar_pedido":
-            return {"text": autorizar_pedido(parametros["pedido_id"])}
-        if acao == "reprovar_pedido":
-            return {"text": reprovar_pedido(parametros["pedido_id"])}
-        if acao == "relatorio_pdf":
-            pid = parametros.get("pedido_id")
-            pdf = gerar_relatorio_pdf_bytes(pid)
-            if not pdf:
-                return {"text": "⚠️ Erro ao gerar PDF."}
-            return {
-                "text": f"📄 PDF do pedido {pid} gerado com sucesso.",
-                "pdf_base64": base64.b64encode(pdf).decode(),
-                "filename": f"pedido_{pid}.pdf",
-            }
-
-        # ========================================================
-        # 💰 FINANCEIRO / IA
-        # ========================================================
-        if acao == "resumo_financeiro":
-            return {"text": resumo_financeiro(**filtros), "buttons": menu_inicial}
-        if acao == "gastos_por_obra":
-            return {"text": gastos_por_obra(**filtros), "buttons": menu_inicial}
-        if acao == "gastos_por_centro_custo":
-            return {"text": gastos_por_centro_custo(**filtros), "buttons": menu_inicial}
-        if acao == "analise_financeira":
-            rel = gerar_relatorio_json(**filtros)
-            df = pd.DataFrame(rel.get("todas_despesas", []))
-            if df.empty:
-                return {"text": "⚠️ Sem dados para análise."}
-            return {"text": gerar_analise_financeira("Relatório Financeiro", df), "buttons": menu_inicial}
-        if acao == "apresentacao_gamma":
-            rel = gerar_relatorio_json(**filtros)
-            df = pd.DataFrame(rel.get("todas_despesas", []))
-            dre = rel.get("dre", {}).get("formatado", {})
-            if df.empty:
-                return {"text": "⚠️ Sem dados para gerar relatório."}
-            link = gerar_relatorio_gamma(df, dre, filtros, msg.user)
-            return {
-                "text": f"🎬 Relatório Gamma (Dark Mode) gerado!\n\n[📊 Acessar Relatório]({link})",
-                "buttons": menu_inicial,
-            }
-        
         if acao == "relatorio_cobrancas":
             # Verificar boletos vencendo baseado nas configurações
             relatorio = gerar_relatorio_cobrancas()
@@ -485,13 +315,69 @@ async def mensagem(msg: Message):
             }
 
         return {
-            "text": "🤖 Não entendi. Dica: `empresa 1 2024-01-01 a 2024-12-31`",
+            "text": "🤖 Não entendi. Digite seu CPF ou CNPJ para buscar boletos.",
             "buttons": menu_inicial,
         }
 
     except Exception as e:
         logging.exception("❌ Erro geral:")
         return {"text": f"Ocorreu um erro: {e}", "buttons": menu_inicial}
+
+# ============================================================
+# 🧪 ENDPOINT PARA TESTAR COBRANÇA MANUALMENTE
+# ============================================================
+@app.post("/testar-cobranca")
+async def testar_cobranca():
+    """
+    Endpoint para testar manualmente o sistema de cobrança
+    """
+    logging.info("🧪 Iniciando teste manual de cobrança...")
+    try:
+        boletos = verificar_boletos_vencendo()
+        logging.info(f"📋 Encontrados {len(boletos)} boletos vencendo")
+        
+        resultados = []
+        for boleto in boletos:
+            if boleto.get("cliente_telefone"):
+                mensagem = gerar_mensagem_cobranca(boleto)
+                # Enviar via WhatsApp Cloud API se configurado
+                if WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN:
+                    numero = re.sub(r"\D", "", boleto["cliente_telefone"])
+                    if numero.startswith("55"):
+                        send_whatsapp_cloud_message(numero, mensagem)
+                        resultados.append({
+                            "cliente": boleto.get("cliente_nome"),
+                            "telefone": numero,
+                            "status": "enviado",
+                            "mensagem": mensagem[:100]
+                        })
+                    else:
+                        resultados.append({
+                            "cliente": boleto.get("cliente_nome"),
+                            "telefone": numero,
+                            "status": "ignorado (não brasileiro)",
+                        })
+                else:
+                    resultados.append({
+                        "cliente": boleto.get("cliente_nome"),
+                        "telefone": boleto.get("cliente_telefone"),
+                        "status": "não enviado (WhatsApp não configurado)",
+                        "mensagem": mensagem[:100]
+                    })
+            else:
+                resultados.append({
+                    "cliente": boleto.get("cliente_nome"),
+                    "status": "sem telefone",
+                })
+        
+        return {
+            "total_boletos": len(boletos),
+            "enviados": len([r for r in resultados if r.get("status") == "enviado"]),
+            "resultados": resultados
+        }
+    except Exception as e:
+        logging.exception("❌ Erro ao testar cobrança:")
+        return {"error": str(e)}
 
 # ============================================================
 # 🌐 WEBHOOK WHATSAPP CLOUD API (VERIFICAÇÃO)
@@ -516,11 +402,12 @@ async def verify_whatsapp(request: Request):
 # ============================================================
 # 💬 WEBHOOK WHATSAPP CLOUD API (RECEBIMENTO)
 # ============================================================
-def send_whatsapp_cloud_message(to_number: str, body: str, buttons: list = None):
+def send_whatsapp_cloud_message(to_number: str, body: str, buttons: list = None, list_items: list = None):
     """
     Envia mensagem de texto usando WhatsApp Cloud API.
     to_number: número sem 'whatsapp:', ex: 559193808761
     buttons: lista de botões interativos
+    list_items: lista de itens para list message com links
     """
     if not (WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN):
         logging.error("❌ WHATSAPP_PHONE_NUMBER_ID ou WHATSAPP_TOKEN não configurados.")
@@ -532,8 +419,44 @@ def send_whatsapp_cloud_message(to_number: str, body: str, buttons: list = None)
         "Content-Type": "application/json",
     }
     
+    # Se houver itens de lista, usa list message com links
+    if list_items and len(list_items) > 0:
+        # WhatsApp suporta até 10 itens na lista
+        list_items = list_items[:10]
+        
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to_number,
+            "type": "interactive",
+            "interactive": {
+                "type": "list",
+                "header": {
+                    "type": "text",
+                    "text": "📄 Boletos Disponíveis"
+                },
+                "body": {
+                    "text": body
+                },
+                "action": {
+                    "button": "Ver Opções",
+                    "sections": [
+                        {
+                            "title": "Segunda Via",
+                            "rows": [
+                                {
+                                    "id": f"item_{i}",
+                                    "title": item.get("title", "")[:24],  # Limite de 24 caracteres
+                                    "description": item.get("description", "")[:72],  # Limite de 72 caracteres
+                                }
+                                for i, item in enumerate(list_items)
+                            ]
+                        }
+                    ]
+                }
+            }
+        }
     # Se houver botões, usa mensagem interativa
-    if buttons and len(buttons) > 0:
+    elif buttons and len(buttons) > 0:
         # WhatsApp suporta até 3 botões
         button_items = buttons[:3]
         
@@ -609,6 +532,24 @@ async def webhook_whatsapp(request: Request):
             button_title = button_reply.get("title", "")
             text = button_title  # Usa o título do botão como texto
             logging.info(f"🔘 Botão clicado: {button_id} - {button_title}")
+        elif interactive and interactive.get("type") == "list_reply":
+            list_reply = interactive.get("list_reply", {})
+            item_id = list_reply.get("id", "")
+            item_title = list_reply.get("title", "")
+            # Se for um item de lista, extrai o comando do ID
+            if item_id.startswith("item_"):
+                # Recupera o contexto para saber qual boleto foi selecionado
+                ctx = usuarios_contexto.get(f"whatsapp:{from_number}", {})
+                boletos = ctx.get("boletos_disponiveis", [])
+                item_index = int(item_id.replace("item_", ""))
+                if item_index < len(boletos):
+                    boleto = boletos[item_index]
+                    texto = f"boleto {boleto['titulo_id']} {boleto['parcela_id']}"
+                    logging.info(f"📋 Item da lista selecionado: {item_title} -> {texto}")
+                else:
+                    texto = item_title
+            else:
+                texto = item_title
         else:
             text = msg.get("text", {}).get("body", "")
 
@@ -618,11 +559,12 @@ async def webhook_whatsapp(request: Request):
         resposta_construia = await mensagem(Message(user=user_id, text=text))
         texto_resposta = resposta_construia.get("text", "Constru.IA: não consegui gerar resposta.")
         
-        # Passa os botões para a função de envio
+        # Passa os botões e list items para a função de envio
         botoes = resposta_construia.get("buttons", [])
+        list_items = resposta_construia.get("list_items", [])
 
-        # Envia resposta via Cloud API com botões
-        send_whatsapp_cloud_message(from_number, texto_resposta, botoes)
+        # Envia resposta via Cloud API com botões ou lista
+        send_whatsapp_cloud_message(from_number, texto_resposta, botoes, list_items)
 
     except Exception as e:
         logging.exception("❌ Erro ao processar webhook WhatsApp:")

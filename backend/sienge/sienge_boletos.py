@@ -290,9 +290,9 @@ def gerar_link_boleto(titulo_id: int, parcela_id: int) -> str:
                 if link:
                     logging.info(f"🟢 Link do boleto gerado: {link}")
                     return (
-                        f"📄 **Segunda via gerada com sucesso!**\n"
-                        f"🔗 [Clique aqui para abrir o boleto]({link})\n"
-                        f"💳 **Linha digitável:** `{linha_digitavel}`"
+                        f"✅ *Segunda via gerada com sucesso!*\n\n"
+                        f"🔗 *Link do boleto:*\n{link}\n\n"
+                        f"💳 *Linha digitável:*\n`{linha_digitavel}`"
                     )
         except Exception as e:
             logging.exception("Erro ao processar resposta do boleto:")
