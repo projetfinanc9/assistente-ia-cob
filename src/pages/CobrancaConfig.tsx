@@ -42,8 +42,9 @@ const CobrancaConfig = () => {
   }, []);
 
   const loadConfig = async () => {
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
     try {
-      const response = await fetch('http://localhost:8000/cobranca-config');
+      const response = await fetch(`${API_URL}/cobranca-config`);
       const data = await response.json();
       setConfig(data);
     } catch (error) {
@@ -56,8 +57,9 @@ const CobrancaConfig = () => {
   const saveConfig = async () => {
     setSaving(true);
     setMessage('');
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
     try {
-      const response = await fetch('http://localhost:8000/cobranca-config', {
+      const response = await fetch(`${API_URL}/cobranca-config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
