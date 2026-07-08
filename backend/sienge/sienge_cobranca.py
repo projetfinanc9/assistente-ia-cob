@@ -125,6 +125,12 @@ def verificar_boletos_vencendo() -> List[Dict]:
     
     logging.info(f"🔍 Verificando boletos com {len(lembretes)} lembretes configurados...")
     
+    # Log dos lembretes configurados
+    for i, lem in enumerate(lembretes):
+        dias = lem.get("dias_antes", 0)
+        data = datetime.now() + timedelta(days=dias)
+        logging.info(f"📅 Lembrete {i+1}: dias_antes={dias}, data_alvo={data.date()}")
+    
     # Buscar todos os clientes
     url = f"{BASE_URL}/customers"
     r = requests.get(url, headers=json_headers, timeout=30)
@@ -146,18 +152,23 @@ def verificar_boletos_vencendo() -> List[Dict]:
         if not cliente_id:
             continue
         
+        logging.info(f"👤 Processando cliente: {cliente_nome} (ID: {cliente_id})")
+        
         # Buscar boletos do cliente
         boletos = listar_boletos_por_cliente(cliente_id)
+        logging.info(f"📄 Cliente {cliente_nome}: {len(boletos)} boletos encontrados")
         
         for boleto in boletos:
             titulo_id = boleto.get("id")
             quitado = boleto.get("payOffDate")
             
             if quitado:
+                logging.info(f"⏭️ Título {titulo_id} já quitado, ignorando")
                 continue  # Pular boletos já quitados
             
             # Buscar parcelas
             parcelas = listar_parcelas(titulo_id)
+            logging.info(f"📦 Título {titulo_id}: {len(parcelas)} parcelas")
             
             for parcela in parcelas:
                 vencimento_str = parcela.get("dueDate")
@@ -169,6 +180,8 @@ def verificar_boletos_vencendo() -> List[Dict]:
                 except:
                     continue
                 
+                logging.info(f"📅 Parcela {parcela.get('id')}: vencimento={vencimento.date()}")
+                
                 # Verificar se vence em algum dos períodos configurados
                 for lembrete in lembretes:
                     dias_antes = lembrete.get("dias_antes", 0)
@@ -176,6 +189,7 @@ def verificar_boletos_vencendo() -> List[Dict]:
                     
                     # Verifica se vence exatamente no dia configurado
                     if vencimento.date() == data_limite.date():
+                        logging.info(f"✅ MATCH! Boleto {titulo_id}/{parcela.get('id')} vence em {dias_antes} dias")
                         boletos_vencendo.append({
                             "cliente_nome": cliente_nome,
                             "cliente_cpf": cliente_cpf,
