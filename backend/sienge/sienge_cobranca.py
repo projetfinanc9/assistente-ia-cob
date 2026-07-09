@@ -47,16 +47,9 @@ def carregar_configuracao_cobranca():
 # ============================================================
 
 
-def listar_boletos_por_cliente(cliente_id: int, data_inicio=None, data_fim=None):
-    """Lista boletos/títulos vinculados a um cliente com filtro de data."""
+def listar_boletos_por_cliente(cliente_id: int):
+    """Lista boletos/títulos vinculados a um cliente."""
     url = f"{BASE_URL}/accounts-receivable/receivable-bills?customerId={cliente_id}"
-    
-    # Adicionar filtros de data se fornecidos
-    if data_inicio:
-        url += f"&issueDate={data_inicio}"
-    if data_fim:
-        url += f"&issueDate={data_fim}"
-    
     r = requests.get(url, headers=json_headers, timeout=30)
     if r.status_code != 200:
         logging.warning(f"⚠️ Erro ao buscar boletos do cliente {cliente_id}: {r.status_code}")
@@ -140,19 +133,8 @@ def verificar_boletos_vencendo() -> List[Dict]:
     
     logging.warning(f"🔍 Verificando boletos com {len(lembretes)} lembretes configurados...")
     
-    # Calcular range de datas para otimizar busca
-    dias_configurados = [lem.get("dias_antes", 0) for lem in lembretes]
-    dias_max = max(dias_configurados) if dias_configurados else 0
-    dias_min = min(dias_configurados) if dias_configurados else 0
-    
-    # Buscar boletos que vencem no range de dias configurado
-    hoje = datetime.now()
-    data_inicio = (hoje + timedelta(days=dias_min)).strftime("%Y-%m-%d")
-    data_fim = (hoje + timedelta(days=dias_max)).strftime("%Y-%m-%d")
-    
-    logging.warning(f"📅 Range de busca: {data_inicio} até {data_fim} ({dias_min} a {dias_max} dias)")
-    
     # Log dos lembretes configurados
+    hoje = datetime.now()
     for i, lem in enumerate(lembretes):
         dias = lem.get("dias_antes", 0)
         data = hoje + timedelta(days=dias)
@@ -193,9 +175,9 @@ def verificar_boletos_vencendo() -> List[Dict]:
         
         logging.warning(f"👤 Processando cliente: {cliente_nome} (ID: {cliente_id})")
         
-        # Buscar boletos do cliente com filtro de data
-        boletos = listar_boletos_por_cliente(cliente_id, data_inicio, data_fim)
-        logging.warning(f"📄 Cliente {cliente_nome}: {len(boletos)} boletos encontrados no período")
+        # Buscar boletos do cliente (API não suporta filtro de data)
+        boletos = listar_boletos_por_cliente(cliente_id)
+        logging.warning(f"📄 Cliente {cliente_nome}: {len(boletos)} boletos encontrados")
         
         for boleto in boletos:
             titulo_id = boleto.get("receivableBillId")
