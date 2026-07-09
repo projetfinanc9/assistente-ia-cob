@@ -225,6 +225,39 @@ def gerar_link_boleto(titulo_id: int, parcela_id: int) -> str:
     return f"❌ Erro ao gerar boleto ({r.status_code})."
 
 
+def baixar_pdf_boleto(titulo_id: int, parcela_id: int) -> bytes:
+    """
+    Baixa o PDF do boleto da API Sienge.
+    Retorna o conteúdo do PDF em bytes ou None se houver erro.
+    """
+    url = f"{BASE_URL}/payment-slip-notification"
+    params = {"billReceivableId": titulo_id, "installmentId": parcela_id}
+    
+    try:
+        r = requests.get(url, headers=json_headers, params=params, timeout=30)
+        if r.status_code == 200:
+            data = r.json()
+            results = data.get("results") or []
+            if results and isinstance(results, list):
+                result = results[0]
+                pdf_url = result.get("urlReport")
+                
+                if pdf_url:
+                    logging.warning(f"📥 Baixando PDF do boleto {titulo_id}/{parcela_id}")
+                    pdf_response = requests.get(pdf_url, timeout=30)
+                    if pdf_response.status_code == 200:
+                        logging.warning(f"✅ PDF baixado com sucesso ({len(pdf_response.content)} bytes)")
+                        return pdf_response.content
+                    else:
+                        logging.warning(f"⚠️ Erro ao baixar PDF: {pdf_response.status_code}")
+        else:
+            logging.warning(f"⚠️ Erro ao buscar boleto: {r.status_code}")
+    except Exception as e:
+        logging.error(f"❌ Erro ao baixar PDF do boleto: {e}")
+    
+    return None
+
+
 # ============================================================
 # 📅 VERIFICAR BOLETOS VENCENDO (USANDO API BULK-DATA)
 # ============================================================

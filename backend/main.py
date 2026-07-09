@@ -438,13 +438,43 @@ async def testar_cobranca():
                     if len(numero) == 11 or len(numero) == 10:
                         numero = "55" + numero
                     if numero.startswith("55"):
-                        send_whatsapp_cloud_message(numero, mensagem)
-                        resultados.append({
-                            "cliente": boleto.get("cliente_nome"),
-                            "telefone": numero,
-                            "status": "enviado",
-                            "mensagem": mensagem[:100]
-                        })
+                        # Verificar se deve enviar PDF do boleto
+                        if boleto.get("enviar_segunda_via"):
+                            from sienge.sienge_cobranca import baixar_pdf_boleto
+                            titulo_id = boleto.get("titulo_id")
+                            parcela_id = boleto.get("parcela_id")
+                            
+                            # Baixar PDF do boleto
+                            pdf_content = baixar_pdf_boleto(titulo_id, parcela_id)
+                            
+                            if pdf_content:
+                                # Enviar PDF como documento
+                                filename = f"boleto_{titulo_id}_{parcela_id}.pdf"
+                                send_whatsapp_document(numero, pdf_content, filename, mensagem)
+                                resultados.append({
+                                    "cliente": boleto.get("cliente_nome"),
+                                    "telefone": numero,
+                                    "status": "enviado (PDF)",
+                                    "mensagem": mensagem[:100]
+                                })
+                            else:
+                                # Se falhar ao baixar PDF, enviar apenas mensagem
+                                send_whatsapp_cloud_message(numero, mensagem)
+                                resultados.append({
+                                    "cliente": boleto.get("cliente_nome"),
+                                    "telefone": numero,
+                                    "status": "enviado (texto apenas - PDF falhou)",
+                                    "mensagem": mensagem[:100]
+                                })
+                        else:
+                            # Enviar apenas mensagem de texto
+                            send_whatsapp_cloud_message(numero, mensagem)
+                            resultados.append({
+                                "cliente": boleto.get("cliente_nome"),
+                                "telefone": numero,
+                                "status": "enviado (texto)",
+                                "mensagem": mensagem[:100]
+                            })
                     else:
                         resultados.append({
                             "cliente": boleto.get("cliente_nome"),
@@ -646,6 +676,69 @@ def send_whatsapp_cloud_message(to_number: str, body: str, buttons: list = None,
         logging.info(f"Resposta Meta: {resp.status_code} - {resp.text}")
     except Exception as e:
         logging.error(f"❌ Erro ao enviar mensagem via Cloud API: {e}")
+
+
+def send_whatsapp_document(to_number: str, file_content: bytes, filename: str, caption: str = None):
+    """
+    Envia documento (PDF, etc.) via WhatsApp Cloud API.
+    to_number: número sem 'whatsapp:', ex: 559193808761
+    file_content: conteúdo do arquivo em bytes
+    filename: nome do arquivo
+    caption: legenda opcional do documento
+    """
+    if not (WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN):
+        logging.error("❌ WHATSAPP_PHONE_NUMBER_ID ou WHATSAPP_TOKEN não configurados.")
+        return
+
+    # Primeiro, fazer upload do documento
+    upload_url = f"https://graph.facebook.com/v20.0/{WHATSAPP_PHONE_NUMBER_ID}/media"
+    upload_headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+    }
+    
+    files = {
+        "file": (filename, file_content),
+        "type": (None, "application/pdf"),
+        "messaging_product": (None, "whatsapp")
+    }
+    
+    try:
+        upload_resp = requests.post(upload_url, headers=upload_headers, files=files)
+        upload_data = upload_resp.json()
+        
+        if upload_resp.status_code != 200:
+            logging.error(f"❌ Erro ao upload documento: {upload_resp.status_code} - {upload_data}")
+            return
+        
+        media_id = upload_data.get("id")
+        logging.info(f"✅ Documento uploadado: {media_id}")
+        
+        # Enviar documento usando media_id
+        message_url = f"https://graph.facebook.com/v20.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
+        message_headers = {
+            "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+            "Content-Type": "application/json",
+        }
+        
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to_number,
+            "type": "document",
+            "document": {
+                "id": media_id,
+                "filename": filename,
+            }
+        }
+        
+        if caption:
+            payload["document"]["caption"] = caption
+        
+        message_resp = requests.post(message_url, headers=message_headers, json=payload)
+        logging.info(f"📤 Enviando documento → {to_number}: {filename}")
+        logging.info(f"Resposta Meta: {message_resp.status_code} - {message_resp.text}")
+        
+    except Exception as e:
+        logging.error(f"❌ Erro ao enviar documento via Cloud API: {e}")
 
 @app.post("/webhook-whatsapp")
 async def webhook_whatsapp(request: Request):
