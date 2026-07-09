@@ -12,6 +12,74 @@ import requests  # <-- para chamar a API do WhatsApp Cloud
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+# ============================================================
+# ⏰ SISTEMA DE AGENDAMENTO
+# ============================================================
+scheduler = AsyncIOScheduler()
+
+async def executar_cobranca_agendada():
+    """Função executada pelo scheduler para verificar boletos vencendo"""
+    logging.warning("⏰ Executando verificação agendada de cobranças...")
+    try:
+        from sienge.sienge_cobranca import verificar_boletos_vencendo, gerar_mensagem_cobranca
+        boletos = verificar_boletos_vencendo()
+        
+        if not boletos:
+            logging.warning("✅ Nenhum boleto para cobrança")
+            return
+        
+        logging.warning(f"📊 {len(boletos)} boletos encontrados para cobrança")
+        
+        for boleto in boletos:
+            if boleto.get("cliente_telefone"):
+                mensagem = gerar_mensagem_cobranca(boleto)
+                if WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN:
+                    numero = re.sub(r"\D", "", boleto["cliente_telefone"])
+                    if len(numero) == 11 or len(numero) == 10:
+                        numero = "55" + numero
+                    if numero.startswith("55"):
+                        send_whatsapp_cloud_message(numero, mensagem)
+                        logging.warning(f"✅ Mensagem enviada para {boleto['cliente_nome']}")
+    except Exception as e:
+        logging.error(f"❌ Erro na execução agendada: {e}", exc_info=True)
+
+def atualizar_agendamento(horario: str):
+    """Atualiza o agendamento com novo horário"""
+    global scheduler
+    
+    # Remover job existente se houver
+    remover_agendamento()
+    
+    # Parse horário (formato HH:MM)
+    try:
+        hora, minuto = map(int, horario.split(":"))
+        logging.warning(f"⏰ Configurando agendamento para {hora}:{minuto}")
+        
+        # Adicionar novo job
+        scheduler.add_job(
+            executar_cobranca_agendada,
+            CronTrigger(hour=hora, minute=minuto),
+            id="cobranca_agendada",
+            replace_existing=True
+        )
+        
+        # Iniciar scheduler se não estiver rodando
+        if not scheduler.running:
+            scheduler.start()
+            logging.warning("✅ Scheduler iniciado")
+        else:
+            logging.warning("✅ Agendamento atualizado")
+    except Exception as e:
+        logging.error(f"❌ Erro ao configurar agendamento: {e}")
+
+def remover_agendamento():
+    """Remove o agendamento de cobrança"""
+    try:
+        scheduler.remove_job("cobranca_agendada")
+        logging.warning("✅ Agendamento removido")
+    except Exception:
+        pass  # Job não existe
+
 # Twilio
 from twilio.rest import Client
 
@@ -131,6 +199,7 @@ class LembreteCobranca(BaseModel):
 
 class ConfiguracaoCobranca(BaseModel):
     ativo: bool
+    horario_execucao: str = "09:00"
     lembretes: List[LembreteCobranca]
 
 # ============================================================
@@ -818,6 +887,7 @@ def save_cobranca_config(config: ConfiguracaoCobranca):
     try:
         config_dict = {
             "ativo": config.ativo,
+            "horario_execucao": config.horario_execucao,
             "lembretes": [
                 {
                     "dias_antes": l.dias_antes,
@@ -836,6 +906,12 @@ def save_cobranca_config(config: ConfiguracaoCobranca):
         import importlib
         from sienge import sienge_cobranca
         importlib.reload(sienge_cobranca)
+        
+        # Atualizar agendamento se estiver ativo
+        if config.ativo:
+            atualizar_agendamento(config.horario_execucao)
+        else:
+            remover_agendamento()
         
         logging.info(f"✅ Configuração de cobrança atualizada")
         return {"success": True, "message": "Configurações de cobrança salvas com sucesso"}

@@ -14,12 +14,14 @@ interface Lembrete {
 
 interface ConfigCobranca {
   ativo: boolean;
+  horario_execucao: string;
   lembretes: Lembrete[];
 }
 
 const CobrancaConfig = () => {
   const [config, setConfig] = useState<ConfigCobranca>({
     ativo: false,
+    horario_execucao: "09:00",
     lembretes: [
       {
         dias_antes: 5,
@@ -125,7 +127,7 @@ const CobrancaConfig = () => {
         <CardHeader>
           <CardTitle>Status do Sistema</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <Label htmlFor="ativo">Cobrança Automática</Label>
@@ -138,6 +140,19 @@ const CobrancaConfig = () => {
               checked={config.ativo}
               onCheckedChange={(checked) => setConfig({ ...config, ativo: checked })}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="horario">Horário de Execução</Label>
+            <Input
+              id="horario"
+              type="time"
+              value={config.horario_execucao}
+              onChange={(e) => setConfig({ ...config, horario_execucao: e.target.value })}
+            />
+            <p className="text-sm text-muted-foreground">
+              Horário em que o sistema verificará boletos vencendo todos os dias
+            </p>
           </div>
         </CardContent>
       </Card>
