@@ -180,7 +180,7 @@ async def mensagem(msg: Message):
     parametros = intencao.get("parametros", {}) or {}
 
     menu_inicial = [
-        {"label": "💳 Segunda Via de Boletos", "action": "buscar_boletos_cpf"},
+        {"label": "2ª Via de Boletos", "action": "buscar_boletos_cpf"},
         {"label": " Relatório de Cobranças", "action": "relatorio_cobrancas"},
     ]
 
@@ -295,7 +295,7 @@ async def mensagem(msg: Message):
                 "text": f"✅ *Boletos disponíveis para {nome}:*\n\n" + "\n\n".join(linhas[:15]),
                 "buttons": botoes
                 + [
-                    {"label": "💳 Nova busca por CPF", "action": "buscar_boletos_cpf"},
+                    {"label": "Nova busca por CPF", "action": "buscar_boletos_cpf"},
                     {"label": "⬅️ Voltar ao menu", "action": "menu_inicial"},
                 ],
             }
