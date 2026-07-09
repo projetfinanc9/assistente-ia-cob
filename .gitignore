@@ -32,3 +32,6 @@ __pycache__/
 *$py.class
 *.so
 .Python
+
+# Cache
+backend/cache/

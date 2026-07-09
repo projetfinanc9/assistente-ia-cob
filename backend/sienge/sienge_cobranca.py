@@ -8,6 +8,50 @@ from pathlib import Path
 from .sienge_config import BASE_URL, json_headers
 from .sienge_boletos import buscar_cliente_por_documento, gerar_link_boleto
 
+# ============================================================
+# 💾 SISTEMA DE CACHE
+# ============================================================
+CACHE_DIR = Path(__file__).parent.parent / "cache"
+CACHE_DIR.mkdir(exist_ok=True)
+
+def obter_dados_cache(cache_key: str, validade_horas: int = 24) -> Dict:
+    """Obtém dados do cache se ainda válido"""
+    cache_file = CACHE_DIR / f"{cache_key}.json"
+    
+    if not cache_file.exists():
+        return None
+    
+    try:
+        with open(cache_file, 'r', encoding='utf-8') as f:
+            cache_data = json.load(f)
+        
+        # Verificar validade
+        cache_time = datetime.fromisoformat(cache_data.get("timestamp", ""))
+        if datetime.now() - cache_time > timedelta(hours=validade_horas):
+            logging.warning(f"🔄 Cache {cache_key} expirado")
+            return None
+        
+        logging.warning(f"✅ Cache {cache_key} válido (idade: {(datetime.now() - cache_time).total_seconds() / 3600:.1f}h)")
+        return cache_data.get("data")
+    except Exception as e:
+        logging.warning(f"⚠️ Erro ao ler cache {cache_key}: {e}")
+        return None
+
+def salvar_cache(cache_key: str, data: Dict):
+    """Salva dados no cache"""
+    cache_file = CACHE_DIR / f"{cache_key}.json"
+    
+    try:
+        cache_data = {
+            "timestamp": datetime.now().isoformat(),
+            "data": data
+        }
+        with open(cache_file, 'w', encoding='utf-8') as f:
+            json.dump(cache_data, f, indent=2, ensure_ascii=False)
+        logging.warning(f"💾 Cache {cache_key} salvo")
+    except Exception as e:
+        logging.warning(f"⚠️ Erro ao salvar cache {cache_key}: {e}")
+
 logging.warning("🔔 Rodando módulo sienge_cobranca.py (sistema de cobrança automática com suporte a CNPJ)")
 
 # ============================================================
@@ -47,8 +91,18 @@ def carregar_configuracao_cobranca():
 # ============================================================
 
 
-def listar_boletos_por_cliente(cliente_id: int):
-    """Lista boletos/títulos vinculados a um cliente."""
+def listar_boletos_por_cliente(cliente_id: int, usar_cache: bool = True):
+    """Lista boletos/títulos vinculados a um cliente com cache."""
+    cache_key = f"boletos_cliente_{cliente_id}"
+    
+    # Tentar obter do cache
+    if usar_cache:
+        dados_cache = obter_dados_cache(cache_key, validade_horas=24)
+        if dados_cache is not None:
+            logging.warning(f"📄 Cache hit para boletos do cliente {cliente_id}")
+            return dados_cache
+    
+    # Buscar da API
     url = f"{BASE_URL}/accounts-receivable/receivable-bills?customerId={cliente_id}"
     r = requests.get(url, headers=json_headers, timeout=30)
     if r.status_code != 200:
@@ -57,20 +111,42 @@ def listar_boletos_por_cliente(cliente_id: int):
     data = r.json()
     results = data.get("results") or []
     logging.warning(f"📄 API retornou {len(results)} boletos para cliente {cliente_id}")
+    
+    # Salvar no cache
     if results:
-        logging.warning(f"🔍 Primeiro boleto: {results[0]}")
+        salvar_cache(cache_key, results)
+        logging.warning(f"� Boletos do cliente {cliente_id} cacheados")
+    
     return results
 
 
-def listar_parcelas(titulo_id: int):
-    """Lista parcelas de um título."""
+def listar_parcelas(titulo_id: int, usar_cache: bool = True):
+    """Lista parcelas de um título com cache."""
     if not titulo_id:
         return []
+    
+    cache_key = f"parcelas_titulo_{titulo_id}"
+    
+    # Tentar obter do cache
+    if usar_cache:
+        dados_cache = obter_dados_cache(cache_key, validade_horas=24)
+        if dados_cache is not None:
+            logging.warning(f"📦 Cache hit para parcelas do título {titulo_id}")
+            return dados_cache
+    
+    # Buscar da API
     url = f"{BASE_URL}/accounts-receivable/receivable-bills/{titulo_id}/installments"
     r = requests.get(url, headers=json_headers, timeout=30)
     if r.status_code != 200:
         return []
-    return r.json().get("results") or []
+    results = r.json().get("results") or []
+    
+    # Salvar no cache
+    if results:
+        salvar_cache(cache_key, results)
+        logging.warning(f"💾 Parcelas do título {titulo_id} cacheadas")
+    
+    return results
 
 
 def boleto_existe(titulo_id: int, parcela_id: int) -> bool:
@@ -140,15 +216,23 @@ def verificar_boletos_vencendo() -> List[Dict]:
         data = hoje + timedelta(days=dias)
         logging.warning(f"📅 Lembrete {i+1}: dias_antes={dias}, data_alvo={data.date()}")
     
-    # Buscar todos os clientes
-    url = f"{BASE_URL}/customers"
-    r = requests.get(url, headers=json_headers, timeout=30)
-    if r.status_code != 200:
-        logging.error(f"Erro ao buscar clientes: {r.status_code}")
-        return []
+    # Buscar todos os clientes (com cache)
+    cache_key_clientes = "lista_clientes"
+    dados_cache_clientes = obter_dados_cache(cache_key_clientes, validade_horas=24)
     
-    clientes = r.json().get("results", [])
-    logging.warning(f"📊 Total de clientes: {len(clientes)}")
+    if dados_cache_clientes is not None:
+        clientes = dados_cache_clientes
+        logging.warning(f"📊 Cache hit para lista de clientes: {len(clientes)} clientes")
+    else:
+        url = f"{BASE_URL}/customers"
+        r = requests.get(url, headers=json_headers, timeout=30)
+        if r.status_code != 200:
+            logging.error(f"Erro ao buscar clientes: {r.status_code}")
+            return []
+        
+        clientes = r.json().get("results", [])
+        salvar_cache(cache_key_clientes, clientes)
+        logging.warning(f"📊 Total de clientes: {len(clientes)} (cacheado)")
     
     boletos_vencendo = []
     
