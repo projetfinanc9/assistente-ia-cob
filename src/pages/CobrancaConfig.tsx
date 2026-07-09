@@ -106,139 +106,135 @@ const CobrancaConfig = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="p-6 flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto space-y-6">
-          <div className="text-center space-y-2">
-            <h1 className="text-3xl font-bold tracking-tight">Configuração de Cobrança Automática</h1>
-            <p className="text-muted-foreground">
-              Configure lembretes automáticos de cobrança via WhatsApp
-            </p>
-          </div>
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold mb-2">Configuração de Cobrança Automática</h1>
+        <p className="text-muted-foreground">
+          Configure lembretes automáticos de cobrança via WhatsApp
+        </p>
+      </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Status do Sistema</CardTitle>
-            </CardHeader>
-            <CardContent>
+      <Card>
+        <CardHeader>
+          <CardTitle>Status do Sistema</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="ativo">Cobrança Automática</Label>
+              <p className="text-sm text-muted-foreground">
+                Ative para enviar lembretes automaticamente
+              </p>
+            </div>
+            <Switch
+              id="ativo"
+              checked={config.ativo}
+              onCheckedChange={(checked) => setConfig({ ...config, ativo: checked })}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Lembretes de Cobrança</CardTitle>
+          <CardDescription>
+            Configure quando e como enviar lembretes de cobrança
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {config.lembretes.map((lembrete, index) => (
+            <div key={index} className="border rounded-lg p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <div>
-                  <Label htmlFor="ativo">Cobrança Automática</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Ative para enviar lembretes automaticamente
-                  </p>
-                </div>
-                <Switch
-                  id="ativo"
-                  checked={config.ativo}
-                  onCheckedChange={(checked) => setConfig({ ...config, ativo: checked })}
+                <h3 className="font-semibold">Lembrete #{index + 1}</h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeLembrete(index)}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Dias antes do vencimento</Label>
+                <Input
+                  type="number"
+                  value={lembrete.dias_antes}
+                  onChange={(e) => updateLembrete(index, 'dias_antes', parseInt(e.target.value))}
                 />
               </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Lembretes de Cobrança</CardTitle>
-              <CardDescription>
-                Configure quando e como enviar lembretes de cobrança
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {config.lembretes.map((lembrete, index) => (
-                <div key={index} className="border rounded-lg p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-semibold">Lembrete #{index + 1}</h3>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeLembrete(index)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Dias antes do vencimento</Label>
-                    <Input
-                      type="number"
-                      value={lembrete.dias_antes}
-                      onChange={(e) => updateLembrete(index, 'dias_antes', parseInt(e.target.value))}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Mensagem do lembrete</Label>
-                    <Input
-                      value={lembrete.mensagem}
-                      onChange={(e) => updateLembrete(index, 'mensagem', e.target.value)}
-                      placeholder="Use {cliente}, {dias}, {valor} como variáveis"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <Label>Enviar segunda via do boleto</Label>
-                    <Switch
-                      checked={lembrete.enviar_segunda_via}
-                      onCheckedChange={(checked) => updateLembrete(index, 'enviar_segunda_via', checked)}
-                    />
-                  </div>
-                </div>
-              ))}
-
-              <Button onClick={addLembrete} variant="outline" className="w-full">
-                <Plus className="w-4 h-4 mr-2" />
-                Adicionar Lembrete
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="space-y-4">
-                <Button onClick={saveConfig} disabled={saving} className="w-full">
-                  {saving ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Salvando...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4 mr-2" />
-                      Salvar Configurações
-                    </>
-                  )}
-                </Button>
-
-                {message && (
-                  <div className={`text-center text-sm ${message.startsWith('✅') ? 'text-green-600' : 'text-red-600'}`}>
-                    {message}
-                  </div>
-                )}
+              <div className="space-y-2">
+                <Label>Mensagem do lembrete</Label>
+                <Input
+                  value={lembrete.mensagem}
+                  onChange={(e) => updateLembrete(index, 'mensagem', e.target.value)}
+                  placeholder="Use {cliente}, {dias}, {valor} como variáveis"
+                />
               </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Variáveis Disponíveis</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <p><code>{"{cliente}"}</code> - Nome do cliente</p>
-              <p><code>{"{dias}"}</code> - Dias até o vencimento</p>
-              <p><code>{"{valor}"}</code> - Valor do boleto</p>
-              <p><code>{"{vencimento}"}</code> - Data de vencimento</p>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+              <div className="flex items-center justify-between">
+                <Label>Enviar segunda via do boleto</Label>
+                <Switch
+                  checked={lembrete.enviar_segunda_via}
+                  onCheckedChange={(checked) => updateLembrete(index, 'enviar_segunda_via', checked)}
+                />
+              </div>
+            </div>
+          ))}
+
+          <Button onClick={addLembrete} variant="outline" className="w-full">
+            <Plus className="w-4 h-4 mr-2" />
+            Adicionar Lembrete
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-6">
+          <div className="space-y-4">
+            <Button onClick={saveConfig} disabled={saving} className="w-full">
+              {saving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 mr-2" />
+                  Salvar Configurações
+                </>
+              )}
+            </Button>
+
+            {message && (
+              <div className={`text-center text-sm ${message.startsWith('✅') ? 'text-green-600' : 'text-red-600'}`}>
+                {message}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Variáveis Disponíveis</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <p><code>{"{cliente}"}</code> - Nome do cliente</p>
+          <p><code>{"{dias}"}</code> - Dias até o vencimento</p>
+          <p><code>{"{valor}"}</code> - Valor do boleto</p>
+          <p><code>{"{vencimento}"}</code> - Data de vencimento</p>
+        </CardContent>
+      </Card>
     </div>
   );
 };
