@@ -809,12 +809,6 @@ def salvar_configuracao_cobranca(config: dict):
         logging.error(f"❌ Erro ao salvar configuração de cobrança: {e}")
         return False
 
-@app.get("/cobranca-config")
-def get_cobranca_config():
-    """Retorna configurações atuais de cobrança automática"""
-    config = carregar_configuracao_cobranca()
-    return config
-
 @app.post("/cobranca-config")
 def save_cobranca_config(config: ConfiguracaoCobranca):
     """Salva novas configurações de cobrança automática"""
