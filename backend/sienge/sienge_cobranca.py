@@ -6,7 +6,7 @@ import re
 import json
 from pathlib import Path
 from .sienge_config import BASE_URL, json_headers
-from .sienge_boletos import buscar_cliente_por_documento
+from .sienge_boletos import buscar_cliente_por_documento, gerar_link_boleto
 
 logging.warning("🔔 Rodando módulo sienge_cobranca.py (sistema de cobrança automática com suporte a CNPJ)")
 
@@ -252,7 +252,7 @@ def gerar_mensagem_cobranca(boleto: Dict) -> str:
     
     # Adicionar segunda via se configurado
     if boleto.get("enviar_segunda_via"):
-        link_boleto = gerar_segunda_via(boleto["titulo_id"], boleto["parcela_id"])
+        link_boleto = gerar_link_boleto(boleto["titulo_id"], boleto["parcela_id"])
         if link_boleto and not link_boleto.startswith("❌"):
             mensagem += f"\n\n📄 **Segunda via:** {link_boleto}"
     
