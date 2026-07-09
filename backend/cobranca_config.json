@@ -1,5 +1,6 @@
 {
   "ativo": true,
+  "horario_execucao": "09:00",
   "lembretes": [
     {
       "dias_antes": 10,
