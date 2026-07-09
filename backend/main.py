@@ -327,6 +327,26 @@ async def mensagem(msg: Message):
 # ============================================================
 # 🧪 ENDPOINT PARA TESTAR COBRANÇA MANUALMENTE
 # ============================================================
+@app.get("/cobranca-historico")
+async def listar_historico_cobrancas():
+    """
+    Endpoint para listar histórico de cobranças
+    """
+    # Por enquanto, retorna um histórico simulado
+    # Em produção, isso deve vir de um banco de dados
+    return {
+        "historico": [
+            {
+                "id": "1",
+                "cliente": "IGOR KAIKY",
+                "telefone": "559193808761",
+                "data": "2026-07-09T09:00:00",
+                "status": "enviado",
+                "mensagem": "Olá IGOR KAIKY, seu boleto vence em 10 dias. Valor: R$ 1000,00"
+            }
+        ]
+    }
+
 @app.post("/testar-cobranca")
 async def testar_cobranca():
     """
