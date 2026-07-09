@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Environment (comentar para permitir commit em produção)
+#.env
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
