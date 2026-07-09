@@ -399,10 +399,10 @@ async def salvar_configuracao_cobranca(config: ConfiguracaoCobranca):
         with open(config_file, 'w', encoding='utf-8') as f:
             json.dump(config.dict(), f, indent=2, ensure_ascii=False)
         logging.info(f"✅ Configuração de cobrança salva: ativo={config.ativo}, lembretes={len(config.lembretes)}")
-        return {"status": "ok", "message": "Configuração salva com sucesso"}
+        return {"success": True}
     except Exception as e:
         logging.error(f"❌ Erro ao salvar configuração de cobrança: {e}")
-        return {"status": "error", "message": str(e)}
+        return {"success": False, "error": str(e)}
 
 @app.get("/cobranca-config")
 async def carregar_configuracao_cobranca_api():
