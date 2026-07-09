@@ -6,16 +6,6 @@
       "dias_antes": 10,
       "mensagem": "Olá {cliente}, seu boleto vence em {dias} dias. Valor: R$ {valor}",
       "enviar_segunda_via": true
-    },
-    {
-      "dias_antes": 5,
-      "mensagem": "Olá {cliente}, seu boleto vence em {dias} dias. Valor: R$ {valor}",
-      "enviar_segunda_via": true
-    },
-    {
-      "dias_antes": 1,
-      "mensagem": "Olá {cliente}, seu boleto vence amanhã! Valor: R$ {valor}",
-      "enviar_segunda_via": true
     }
   ]
 }
