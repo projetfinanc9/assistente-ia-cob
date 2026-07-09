@@ -156,6 +156,9 @@ def verificar_boletos_vencendo() -> List[Dict]:
         cliente_cpf = cliente.get("cpf")
         cliente_telefone = cliente.get("phone") or cliente.get("mobile")
         
+        # Log para debug do telefone
+        logging.warning(f"📞 Cliente {cliente_nome}: phone={cliente.get('phone')}, mobile={cliente.get('mobile')}, telefone_final={cliente_telefone}")
+        
         if not cliente_id:
             continue
         
