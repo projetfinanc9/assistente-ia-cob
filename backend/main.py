@@ -365,6 +365,9 @@ async def testar_cobranca():
                 # Enviar via WhatsApp Cloud API se configurado
                 if WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN:
                     numero = re.sub(r"\D", "", boleto["cliente_telefone"])
+                    # Adicionar código do país 55 se for número brasileiro (10 ou 11 dígitos)
+                    if len(numero) == 11 or len(numero) == 10:
+                        numero = "55" + numero
                     if numero.startswith("55"):
                         send_whatsapp_cloud_message(numero, mensagem)
                         resultados.append({
