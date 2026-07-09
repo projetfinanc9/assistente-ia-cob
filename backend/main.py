@@ -697,8 +697,7 @@ def send_whatsapp_document(to_number: str, file_content: bytes, filename: str, c
     }
     
     files = {
-        "file": (filename, file_content),
-        "type": (None, "application/pdf"),
+        "file": (filename, file_content, "application/pdf"),
         "messaging_product": (None, "whatsapp")
     }
     
