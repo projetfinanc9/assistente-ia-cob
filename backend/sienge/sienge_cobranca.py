@@ -149,6 +149,45 @@ def listar_parcelas(titulo_id: int, usar_cache: bool = True):
     return results
 
 
+def listar_parcelas_por_periodo_bulk(data_inicio: str, data_fim: str) -> List[Dict]:
+    """
+    Usa API Bulk-data para buscar parcelas por período de vencimento.
+    Economia massiva de requisições comparado à API tradicional.
+    """
+    cache_key = f"bulk_parcelas_{data_inicio}_{data_fim}"
+    
+    # Tentar obter do cache
+    dados_cache = obter_dados_cache(cache_key, validade_horas=1)  # Cache de 1h para dados de período
+    if dados_cache is not None:
+        logging.warning(f"📦 Cache hit para bulk data {data_inicio} a {data_fim}")
+        return dados_cache
+    
+    # Usar API Bulk-data com filtro de vencimento (selectionType=D)
+    url = f"{BASE_URL.replace('/api/v1', '/api/bulk-data/v1')}/income"
+    params = {
+        "startDate": data_inicio,
+        "endDate": data_fim,
+        "selectionType": "D"  # D = data de vencimento da parcela
+    }
+    
+    logging.warning(f"🔍 Buscando parcelas via Bulk-data: {data_inicio} a {data_fim}")
+    r = requests.get(url, headers=json_headers, params=params, timeout=60)
+    
+    if r.status_code != 200:
+        logging.warning(f"⚠️ Erro ao buscar bulk data: {r.status_code}")
+        return []
+    
+    data = r.json()
+    results = data.get("data", [])
+    
+    # Salvar no cache
+    if results:
+        salvar_cache(cache_key, results)
+        logging.warning(f"💾 {len(results)} parcelas cacheadas via Bulk-data")
+    
+    return results
+
+
 def boleto_existe(titulo_id: int, parcela_id: int) -> bool:
     """Verifica se existe segunda via real para essa parcela."""
     url = f"{BASE_URL}/payment-slip-notification"
@@ -187,12 +226,12 @@ def gerar_link_boleto(titulo_id: int, parcela_id: int) -> str:
 
 
 # ============================================================
-# 📅 VERIFICAR BOLETOS VENCENDO (USANDO CONFIGURAÇÕES PERSONALIZADAS)
+# 📅 VERIFICAR BOLETOS VENCENDO (USANDO API BULK-DATA)
 # ============================================================
 def verificar_boletos_vencendo() -> List[Dict]:
     """
-    Busca boletos vencendo baseado nas configurações personalizadas.
-    Otimizado para usar filtros de data e reduzir consumo da API.
+    Busca boletos vencendo usando API Bulk-data com filtros de data.
+    Economia massiva de requisições comparado à API tradicional.
     Retorna lista de dicionários com informações do cliente e boletos.
     """
     config = carregar_configuracao_cobranca()
@@ -209,105 +248,96 @@ def verificar_boletos_vencendo() -> List[Dict]:
     
     logging.warning(f"🔍 Verificando boletos com {len(lembretes)} lembretes configurados...")
     
-    # Log dos lembretes configurados
+    # Calcular range de datas para busca otimizada
+    dias_configurados = [lem.get("dias_antes", 0) for lem in lembretes]
+    dias_max = max(dias_configurados) if dias_configurados else 0
+    dias_min = min(dias_configurados) if dias_configurados else 0
+    
+    # Buscar parcelas que vencem no range configurado usando API Bulk-data
     hoje = datetime.now()
+    data_inicio = (hoje + timedelta(days=dias_min)).strftime("%Y-%m-%d")
+    data_fim = (hoje + timedelta(days=dias_max)).strftime("%Y-%m-%d")
+    
+    logging.warning(f"📅 Buscando parcelas via Bulk-data: {data_inicio} até {data_fim}")
+    
+    # Usar API Bulk-data (1 requisição apenas!)
+    parcelas_bulk = listar_parcelas_por_periodo_bulk(data_inicio, data_fim)
+    
+    if not parcelas_bulk:
+        logging.warning("📭 Nenhuma parcela encontrada no período via Bulk-data")
+        return []
+    
+    logging.warning(f"📊 {len(parcelas_bulk)} parcelas encontradas via Bulk-data")
+    
+    # Log dos lembretes configurados
     for i, lem in enumerate(lembretes):
         dias = lem.get("dias_antes", 0)
         data = hoje + timedelta(days=dias)
         logging.warning(f"📅 Lembrete {i+1}: dias_antes={dias}, data_alvo={data.date()}")
     
-    # Buscar todos os clientes (com cache)
-    cache_key_clientes = "lista_clientes"
-    dados_cache_clientes = obter_dados_cache(cache_key_clientes, validade_horas=24)
-    
-    if dados_cache_clientes is not None:
-        clientes = dados_cache_clientes
-        logging.warning(f"📊 Cache hit para lista de clientes: {len(clientes)} clientes")
-    else:
-        url = f"{BASE_URL}/customers"
-        r = requests.get(url, headers=json_headers, timeout=30)
-        if r.status_code != 200:
-            logging.error(f"Erro ao buscar clientes: {r.status_code}")
-            return []
-        
-        clientes = r.json().get("results", [])
-        salvar_cache(cache_key_clientes, clientes)
-        logging.warning(f"📊 Total de clientes: {len(clientes)} (cacheado)")
-    
     boletos_vencendo = []
     
-    for cliente in clientes:
-        cliente_id = cliente.get("id")
-        cliente_nome = cliente.get("name")
-        cliente_cpf = cliente.get("cpf")
-        
-        # Pegar telefone do array phones
-        cliente_telefone = None
-        phones = cliente.get("phones", [])
-        if phones:
-            # Tentar pegar o telefone principal
-            for phone in phones:
-                if phone.get("main"):
-                    cliente_telefone = phone.get("number")
-                    break
-            # Se não tiver principal, pega o primeiro
-            if not cliente_telefone:
-                cliente_telefone = phones[0].get("number")
-        
-        if not cliente_id:
+    # Processar parcelas retornadas pelo Bulk-data
+    for parcela in parcelas_bulk:
+        # Verificar se parcela tem baixa (paga)
+        receipts = parcela.get("receipts", [])
+        if receipts:
+            logging.warning(f"⏭️ Parcela {parcela.get('installmentId')} já tem baixa, ignorando")
             continue
         
-        logging.warning(f"👤 Processando cliente: {cliente_nome} (ID: {cliente_id})")
+        # Extrair dados da parcela
+        vencimento_str = parcela.get("dueDate")
+        if not vencimento_str:
+            continue
         
-        # Buscar boletos do cliente (API não suporta filtro de data)
-        boletos = listar_boletos_por_cliente(cliente_id)
-        logging.warning(f"📄 Cliente {cliente_nome}: {len(boletos)} boletos encontrados")
+        try:
+            vencimento = datetime.strptime(vencimento_str, "%Y-%m-%d")
+        except:
+            continue
         
-        for boleto in boletos:
-            titulo_id = boleto.get("receivableBillId")
-            quitado = boleto.get("payOffDate")
+        logging.warning(f"📅 Parcela {parcela.get('installmentId')}: vencimento={vencimento.date()}")
+        
+        # Verificar se vence em algum dos períodos configurados
+        for lembrete in lembretes:
+            dias_antes = lembrete.get("dias_antes", 0)
+            data_limite = hoje + timedelta(days=dias_antes)
             
-            if quitado:
-                logging.warning(f"⏭️ Título {titulo_id} já quitado, ignorando")
-                continue  # Pular boletos já quitados
-            
-            # Buscar parcelas
-            parcelas = listar_parcelas(titulo_id)
-            logging.warning(f"📦 Título {titulo_id}: {len(parcelas)} parcelas")
-            
-            for parcela in parcelas:
-                vencimento_str = parcela.get("dueDate")
-                if not vencimento_str:
-                    continue
+            # Verifica se vence exatamente no dia configurado
+            if vencimento.date() == data_limite.date():
+                logging.warning(f"✅ MATCH! Parcela {parcela.get('installmentId')} vence em {dias_antes} dias")
                 
-                try:
-                    vencimento = datetime.strptime(vencimento_str, "%Y-%m-%d")
-                except:
-                    continue
+                # Buscar telefone do cliente (usar cache se disponível)
+                cliente_id = parcela.get("clientId")
+                cliente_nome = parcela.get("clientName")
+                cliente_telefone = None
                 
-                logging.warning(f"📅 Parcela {parcela.get('id')}: vencimento={vencimento.date()}")
+                # Tentar obter telefone do cache de clientes
+                cache_clientes = obter_dados_cache("lista_clientes", validade_horas=24)
+                if cache_clientes:
+                    for cliente in cache_clientes:
+                        if cliente.get("id") == cliente_id:
+                            phones = cliente.get("phones", [])
+                            if phones:
+                                for phone in phones:
+                                    if phone.get("main"):
+                                        cliente_telefone = phone.get("number")
+                                        break
+                                if not cliente_telefone:
+                                    cliente_telefone = phones[0].get("number")
+                            break
                 
-                # Verificar se vence em algum dos períodos configurados
-                for lembrete in lembretes:
-                    dias_antes = lembrete.get("dias_antes", 0)
-                    data_limite = hoje + timedelta(days=dias_antes)
-                    
-                    # Verifica se vence exatamente no dia configurado
-                    if vencimento.date() == data_limite.date():
-                        logging.warning(f"✅ MATCH! Boleto {titulo_id}/{parcela.get('id')} vence em {dias_antes} dias")
-                        boletos_vencendo.append({
-                            "cliente_nome": cliente_nome,
-                            "cliente_cpf": cliente_cpf,
-                            "cliente_telefone": cliente_telefone,
-                            "titulo_id": titulo_id,
-                            "parcela_id": parcela.get("id"),
-                            "vencimento": vencimento_str,
-                            "valor": parcela.get("balanceDue") or boleto.get("amount") or 0,
-                            "dias_antes": dias_antes,
-                            "mensagem_template": lembrete.get("mensagem"),
-                            "enviar_segunda_via": lembrete.get("enviar_segunda_via", False)
-                        })
-                        logging.warning(f"✅ Boleto encontrado: {cliente_nome} - Vence em {dias_antes} dias")
+                boletos_vencendo.append({
+                    "cliente_nome": cliente_nome,
+                    "cliente_telefone": cliente_telefone,
+                    "titulo_id": parcela.get("billId"),
+                    "parcela_id": parcela.get("installmentId"),
+                    "vencimento": vencimento_str,
+                    "valor": parcela.get("balanceAmount") or parcela.get("originalAmount") or 0,
+                    "dias_antes": dias_antes,
+                    "mensagem_template": lembrete.get("mensagem"),
+                    "enviar_segunda_via": lembrete.get("enviar_segunda_via", False)
+                })
+                logging.warning(f"✅ Boleto encontrado: {cliente_nome} - Vence em {dias_antes} dias")
     
     logging.info(f"📊 Total de boletos para cobrança: {len(boletos_vencendo)}")
     return boletos_vencendo
