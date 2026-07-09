@@ -24,11 +24,11 @@ const Settings = () => {
       const response = await fetch(`${API_URL}/config`);
       if (response.ok) {
         const data = await response.json();
-        setConfig({
+        setConfig(prev => ({
           subdomain: data.subdomain || "",
           username: data.username || "",
-          password: data.password || "",
-        });
+          password: data.password || prev.password, // Manter senha existente se backend não retornar
+        }));
       }
     } catch (error) {
       console.error("Erro ao carregar configurações:", error);
