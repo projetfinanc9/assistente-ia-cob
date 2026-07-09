@@ -815,17 +815,22 @@ async def webhook_whatsapp(request: Request):
             logging.warning("⚠️ text está vazio após processamento, usando string vazia")
 
         user_id = f"whatsapp:{from_number}"
+        logging.info(f"👤 Processando mensagem do usuário {user_id}: '{text}'")
 
         # Usa a MESMA lógica do backend normal
         resposta_construia = await mensagem(Message(user=user_id, text=text))
         texto_resposta = resposta_construia.get("text", "Constru.IA: não consegui gerar resposta.")
+        logging.info(f"💬 Resposta gerada: '{texto_resposta[:100]}...'")
         
         # Passa os botões e list items para a função de envio
         botoes = resposta_construia.get("buttons", [])
         list_items = resposta_construia.get("list_items", [])
+        logging.info(f"🔘 Botões: {len(botoes)}, 📋 List items: {len(list_items)}")
 
         # Envia resposta via Cloud API com botões ou lista
+        logging.info(f"📤 Enviando resposta para {from_number}...")
         send_whatsapp_cloud_message(from_number, texto_resposta, botoes, list_items)
+        logging.info(f"✅ Resposta enviada com sucesso")
 
     except Exception as e:
         logging.exception("❌ Erro ao processar webhook WhatsApp:")
