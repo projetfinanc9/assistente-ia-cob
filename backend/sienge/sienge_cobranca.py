@@ -154,13 +154,19 @@ def verificar_boletos_vencendo() -> List[Dict]:
         cliente_id = cliente.get("id")
         cliente_nome = cliente.get("name")
         cliente_cpf = cliente.get("cpf")
-        cliente_telefone = cliente.get("phone") or cliente.get("mobile")
         
-        # Log para debug - mostrar todos os campos do cliente
-        logging.warning(f"🔍 Cliente {cliente_nome}: dados completos={cliente}")
-        
-        # Log para debug do telefone
-        logging.warning(f"📞 Cliente {cliente_nome}: phone={cliente.get('phone')}, mobile={cliente.get('mobile')}, telefone_final={cliente_telefone}")
+        # Pegar telefone do array phones
+        cliente_telefone = None
+        phones = cliente.get("phones", [])
+        if phones:
+            # Tentar pegar o telefone principal
+            for phone in phones:
+                if phone.get("main"):
+                    cliente_telefone = phone.get("number")
+                    break
+            # Se não tiver principal, pega o primeiro
+            if not cliente_telefone:
+                cliente_telefone = phones[0].get("number")
         
         if not cliente_id:
             continue
