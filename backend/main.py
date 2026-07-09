@@ -342,7 +342,7 @@ async def listar_historico_cobrancas():
                 "telefone": "559193808761",
                 "data": "2026-07-09T09:00:00",
                 "status": "enviado",
-                "mensagem": "Olá IGOR KAIKY, seu boleto vence em 10 dias. Valor: R$ 1000,00"
+                "mensagem": "Olá IGOR KAIKY, seu boleto vence em 10 dias. Valor: R$ 10,00"
             }
         ]
     }
