@@ -275,6 +275,20 @@ def verificar_boletos_vencendo() -> List[Dict]:
         data = hoje + timedelta(days=dias)
         logging.warning(f"📅 Lembrete {i+1}: dias_antes={dias}, data_alvo={data.date()}")
     
+    # Buscar lista de clientes se cache não existir (para obter telefones)
+    cache_clientes = obter_dados_cache("lista_clientes", validade_horas=24)
+    if not cache_clientes:
+        logging.warning("📊 Cache de clientes não existe, buscando da API...")
+        url = f"{BASE_URL}/customers"
+        r = requests.get(url, headers=json_headers, timeout=30)
+        if r.status_code == 200:
+            cache_clientes = r.json().get("results", [])
+            salvar_cache("lista_clientes", cache_clientes)
+            logging.warning(f"📊 {len(cache_clientes)} clientes cacheados")
+        else:
+            logging.warning(f"⚠️ Erro ao buscar clientes: {r.status_code}")
+            cache_clientes = []
+    
     boletos_vencendo = []
     
     # Processar parcelas retornadas pelo Bulk-data
