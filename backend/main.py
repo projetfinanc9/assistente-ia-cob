@@ -106,7 +106,6 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:8080",
         "http://localhost:5173",
-        "https://constru-ai-connect.lovable.app",
         "https://constru-ai-connect-prwx.onrender.com",
         "*"
     ],
