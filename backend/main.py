@@ -295,7 +295,10 @@ async def mensagem(msg: Message):
             }
 
         if acao == "buscar_boletos_cpf":
-            return {"text": "💳 Digite o CPF ou CNPJ do titular dos boletos.", "buttons": menu_inicial}
+            return {
+                "text": "💳 Digite o CPF ou CNPJ do titular dos boletos:",
+                "buttons": [{"label": "⬅️ Voltar ao menu", "action": "menu_inicial"}]
+            }
 
         # ========================================================
         # 💳 CONFIRMAR BOLETOS
