@@ -1198,6 +1198,8 @@ def salvar_configuracao_cobranca(config: dict):
 def save_cobranca_config(config: ConfiguracaoCobranca):
     """Salva novas configurações de cobrança automática no Supabase"""
     try:
+        logging.warning(f"📝 Recebendo configuração: ativo={config.ativo}, horario={config.horario_execucao}, lembretes={len(config.lembretes)}")
+        
         config_dict = {
             "ativo": config.ativo,
             "horario_execucao": config.horario_execucao,
@@ -1211,10 +1213,15 @@ def save_cobranca_config(config: ConfiguracaoCobranca):
             ]
         }
         
+        logging.warning(f"📦 Config dict preparado: {config_dict}")
+        
         # Salvar no Supabase
         try:
+            logging.warning("🔄 Tentando importar supabase_client...")
             from supabase_client import salvar_configuracao_cobranca
+            logging.warning("✅ Importação bem-sucedida, chamando salvar_configuracao_cobranca...")
             resultado = salvar_configuracao_cobranca(config_dict)
+            logging.warning(f"📊 Resultado do Supabase: {resultado}")
             if not resultado:
                 logging.warning("⚠️ Falha ao salvar no Supabase, tentando salvar localmente")
                 sucesso = salvar_configuracao_cobranca(config_dict)
