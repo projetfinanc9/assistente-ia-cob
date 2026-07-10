@@ -17,6 +17,11 @@ from apscheduler.triggers.cron import CronTrigger
 # ============================================================
 scheduler = AsyncIOScheduler()
 
+# ============================================================
+# 🔄 DEDUPLICAÇÃO DE MENSAGENS WHATSAPP
+# ============================================================
+processed_messages = set()  # Armazena IDs de mensagens já processadas
+
 async def executar_cobranca_agendada():
     """Função executada pelo scheduler para verificar boletos vencendo"""
     logging.warning("⏰ Executando verificação agendada de cobranças...")
@@ -765,6 +770,19 @@ async def webhook_whatsapp(request: Request):
 
         msg = messages[0]
         from_number = msg.get("from")             # ex: "559193808761"
+        message_id = msg.get("id")               # ID único da mensagem para deduplicação
+        
+        # Deduplicação: verificar se já processamos esta mensagem
+        if message_id and message_id in processed_messages:
+            logging.warning(f"⚠️ Mensagem {message_id} já processada, ignorando")
+            return {"status": "duplicate"}
+        
+        # Marcar mensagem como processada
+        if message_id:
+            processed_messages.add(message_id)
+            # Manter apenas os últimos 1000 IDs para evitar crescimento infinito
+            if len(processed_messages) > 1000:
+                processed_messages.clear()
         
         # Inicializar text com valor padrão (proteção contra UnboundLocalError)
         text = msg.get("text", {}).get("body", "")
