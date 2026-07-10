@@ -827,7 +827,7 @@ def send_whatsapp_document(to_number: str, file_content: bytes, filename: str, c
             return
         
         media_id = upload_data.get("id")
-        logging.info(f"✅ Documento uploadado: {media_id}")
+        logging.warning(f"✅ Documento uploadado: {media_id}")
         
         # Enviar documento usando media_id
         message_url = f"https://graph.facebook.com/v20.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
@@ -850,8 +850,8 @@ def send_whatsapp_document(to_number: str, file_content: bytes, filename: str, c
             payload["document"]["caption"] = caption
         
         message_resp = requests.post(message_url, headers=message_headers, json=payload)
-        logging.info(f"📤 Enviando documento → {to_number}: {filename}")
-        logging.info(f"Resposta Meta: {message_resp.status_code} - {message_resp.text}")
+        logging.warning(f"📤 Enviando documento → {to_number}: {filename}")
+        logging.warning(f"Resposta Meta: {message_resp.status_code} - {message_resp.text}")
         
     except Exception as e:
         logging.error(f"❌ Erro ao enviar documento via Cloud API: {e}")
