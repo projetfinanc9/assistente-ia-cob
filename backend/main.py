@@ -553,15 +553,26 @@ async def testar_cobranca():
                                             "tipo_envio": "texto",
                                             "erro_mensagem": "PDF falhou, enviado como texto",
                                             "enviado_em": datetime.now().isoformat()
+                                        })
+                                    except Exception as e:
+                                        logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
+                                    resultados.append({
+                                        "cliente": boleto.get("cliente_nome"),
+                                        "telefone": numero,
+                                        "status": "enviado (texto apenas - PDF falhou)",
+                                        "mensagem": mensagem[:100]
                                     })
                                 except Exception as e:
-                                    logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
-                                resultados.append({
-                                    "cliente": boleto.get("cliente_nome"),
-                                    "telefone": numero,
-                                    "status": "enviado (texto apenas - PDF falhou)",
-                                    "mensagem": mensagem[:100]
-                                })
+                                    logging.warning(f"❌ Erro ao enviar mensagem via WhatsApp: {e}")
+                                    # Atualizar status como erro
+                                    try:
+                                        from supabase_client import atualizar_historico_cobranca
+                                        atualizar_historico_cobranca(historico_id, {
+                                            "status": "erro",
+                                            "erro_mensagem": str(e)
+                                        })
+                                    except Exception as e2:
+                                        logging.warning(f"⚠️ Erro ao atualizar histórico com erro: {e2}")
                         else:
                             # Enviar apenas mensagem de texto
                             logging.warning(f"📤 Enviando mensagem de texto para {numero}")
