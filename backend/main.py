@@ -508,33 +508,51 @@ async def testar_cobranca():
                             if pdf_content:
                                 # Enviar PDF como documento
                                 filename = f"boleto_{titulo_id}_{parcela_id}.pdf"
-                                send_whatsapp_document(numero, pdf_content, filename, mensagem)
-                                # Atualizar status no histórico
+                                logging.warning(f"📤 Enviando PDF via WhatsApp para {numero}")
                                 try:
-                                    from supabase_client import atualizar_historico_cobranca
-                                    atualizar_historico_cobranca(historico_id, {
-                                        "status": "enviado",
-                                        "enviado_em": datetime.now().isoformat()
+                                    send_whatsapp_document(numero, pdf_content, filename, mensagem)
+                                    logging.warning(f"✅ PDF enviado com sucesso para {numero}")
+                                    # Atualizar status no histórico
+                                    try:
+                                        from supabase_client import atualizar_historico_cobranca
+                                        atualizar_historico_cobranca(historico_id, {
+                                            "status": "enviado",
+                                            "enviado_em": datetime.now().isoformat()
+                                        })
+                                        logging.warning(f"✅ Status atualizado para enviado")
+                                    except Exception as e:
+                                        logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
+                                    resultados.append({
+                                        "cliente": boleto.get("cliente_nome"),
+                                        "telefone": numero,
+                                        "status": "enviado (PDF)",
+                                        "mensagem": mensagem[:100]
                                     })
                                 except Exception as e:
-                                    logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
-                                resultados.append({
-                                    "cliente": boleto.get("cliente_nome"),
-                                    "telefone": numero,
-                                    "status": "enviado (PDF)",
-                                    "mensagem": mensagem[:100]
-                                })
+                                    logging.warning(f"❌ Erro ao enviar PDF via WhatsApp: {e}")
+                                    # Atualizar status como erro
+                                    try:
+                                        from supabase_client import atualizar_historico_cobranca
+                                        atualizar_historico_cobranca(historico_id, {
+                                            "status": "erro",
+                                            "erro_mensagem": str(e)
+                                        })
+                                    except Exception as e2:
+                                        logging.warning(f"⚠️ Erro ao atualizar histórico com erro: {e2}")
                             else:
                                 # Se falhar ao baixar PDF, enviar apenas mensagem
-                                send_whatsapp_cloud_message(numero, mensagem)
-                                # Atualizar status no histórico
+                                logging.warning(f"📤 Enviando mensagem de texto para {numero}")
                                 try:
-                                    from supabase_client import atualizar_historico_cobranca
-                                    atualizar_historico_cobranca(historico_id, {
-                                        "status": "enviado",
-                                        "tipo_envio": "texto",
-                                        "erro_mensagem": "PDF falhou, enviado como texto",
-                                        "enviado_em": datetime.now().isoformat()
+                                    send_whatsapp_cloud_message(numero, mensagem)
+                                    logging.warning(f"✅ Mensagem enviada com sucesso para {numero}")
+                                    # Atualizar status no histórico
+                                    try:
+                                        from supabase_client import atualizar_historico_cobranca
+                                        atualizar_historico_cobranca(historico_id, {
+                                            "status": "enviado",
+                                            "tipo_envio": "texto",
+                                            "erro_mensagem": "PDF falhou, enviado como texto",
+                                            "enviado_em": datetime.now().isoformat()
                                     })
                                 except Exception as e:
                                     logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
@@ -546,22 +564,37 @@ async def testar_cobranca():
                                 })
                         else:
                             # Enviar apenas mensagem de texto
-                            send_whatsapp_cloud_message(numero, mensagem)
-                            # Atualizar status no histórico
+                            logging.warning(f"📤 Enviando mensagem de texto para {numero}")
                             try:
-                                from supabase_client import atualizar_historico_cobranca
-                                atualizar_historico_cobranca(historico_id, {
-                                    "status": "enviado",
-                                    "enviado_em": datetime.now().isoformat()
+                                send_whatsapp_cloud_message(numero, mensagem)
+                                logging.warning(f"✅ Mensagem enviada com sucesso para {numero}")
+                                # Atualizar status no histórico
+                                try:
+                                    from supabase_client import atualizar_historico_cobranca
+                                    atualizar_historico_cobranca(historico_id, {
+                                        "status": "enviado",
+                                        "enviado_em": datetime.now().isoformat()
+                                    })
+                                    logging.warning(f"✅ Status atualizado para enviado")
+                                except Exception as e:
+                                    logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
+                                resultados.append({
+                                    "cliente": boleto.get("cliente_nome"),
+                                    "telefone": numero,
+                                    "status": "enviado (texto)",
+                                    "mensagem": mensagem[:100]
                                 })
                             except Exception as e:
-                                logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
-                            resultados.append({
-                                "cliente": boleto.get("cliente_nome"),
-                                "telefone": numero,
-                                "status": "enviado (texto)",
-                                "mensagem": mensagem[:100]
-                            })
+                                logging.warning(f"❌ Erro ao enviar mensagem via WhatsApp: {e}")
+                                # Atualizar status como erro
+                                try:
+                                    from supabase_client import atualizar_historico_cobranca
+                                    atualizar_historico_cobranca(historico_id, {
+                                        "status": "erro",
+                                        "erro_mensagem": str(e)
+                                    })
+                                except Exception as e2:
+                                    logging.warning(f"⚠️ Erro ao atualizar histórico com erro: {e2}")
                     else:
                         resultados.append({
                             "cliente": boleto.get("cliente_nome"),
