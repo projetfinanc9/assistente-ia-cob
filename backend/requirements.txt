@@ -12,3 +12,4 @@ python-pptx
 python-multipart
 twilio
 apscheduler==3.10.4
+supabase==2.7.0
