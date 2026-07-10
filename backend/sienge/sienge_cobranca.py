@@ -320,8 +320,8 @@ def verificar_boletos_vencendo() -> List[Dict]:
     # Log dos lembretes configurados
     for i, lem in enumerate(lembretes):
         dias = lem.get("dias_antes", 0)
-        data = hoje + timedelta(days=dias)
-        logging.warning(f"📅 Lembrete {i+1}: dias_antes={dias}, data_alvo={data.date()}")
+        tipo = "antes" if dias < 0 else "depois" if dias > 0 else "no dia"
+        logging.warning(f"📅 Lembrete {i+1}: {dias} dias {tipo} do vencimento")
     
     # Buscar lista de clientes se cache não existir (para obter telefones)
     cache_clientes = obter_dados_cache("lista_clientes", validade_horas=24)
@@ -359,14 +359,14 @@ def verificar_boletos_vencendo() -> List[Dict]:
         
         logging.warning(f"📅 Parcela {parcela.get('installmentId')}: vencimento={vencimento.date()}")
         
-        # Verificar se vence em algum dos períodos configurados
+        # Verificar se deve ser notificado hoje (baseado no vencimento)
         for lembrete in lembretes:
             dias_antes = lembrete.get("dias_antes", 0)
-            data_limite = hoje + timedelta(days=dias_antes)
+            data_notificacao = vencimento + timedelta(days=dias_antes)
             
-            # Verifica se vence exatamente no dia configurado
-            if vencimento.date() == data_limite.date():
-                logging.warning(f"✅ MATCH! Parcela {parcela.get('installmentId')} vence em {dias_antes} dias")
+            # Verifica se hoje é o dia da notificação
+            if hoje.date() == data_notificacao.date():
+                logging.warning(f"✅ MATCH! Parcela {parcela.get('installmentId')} - Vencimento: {vencimento.date()}, Notificação: {dias_antes} dias, Data alvo: {data_notificacao.date()}")
                 
                 # Buscar telefone do cliente (usar cache se disponível)
                 cliente_id = parcela.get("clientId")
