@@ -17,6 +17,19 @@ CREATE TABLE IF NOT EXISTS configuracoes_cobranca (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Remover campo lembretes antigo se existir (migração de estrutura)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_name = 'configuracoes_cobranca' 
+        AND column_name = 'lembretes'
+    ) THEN
+        ALTER TABLE configuracoes_cobranca DROP COLUMN lembretes;
+    END IF;
+END $$;
+
 -- ============================================================
 -- TABELA: lembretes_cobranca
 -- Armazena lembretes de cobrança (um por linha)
@@ -107,16 +120,19 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_configuracoes_cobranca_updated_at ON configuracoes_cobranca;
 CREATE TRIGGER trigger_configuracoes_cobranca_updated_at
     BEFORE UPDATE ON configuracoes_cobranca
     FOR EACH ROW
     EXECUTE FUNCTION atualizar_updated_at();
 
+DROP TRIGGER IF EXISTS trigger_historico_cobrancas_updated_at ON historico_cobrancas;
 CREATE TRIGGER trigger_historico_cobrancas_updated_at
     BEFORE UPDATE ON historico_cobrancas
     FOR EACH ROW
     EXECUTE FUNCTION atualizar_updated_at();
 
+DROP TRIGGER IF EXISTS trigger_lembretes_cobranca_updated_at ON lembretes_cobranca;
 CREATE TRIGGER trigger_lembretes_cobranca_updated_at
     BEFORE UPDATE ON lembretes_cobranca
     FOR EACH ROW
