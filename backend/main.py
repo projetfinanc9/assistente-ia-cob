@@ -591,33 +591,27 @@ async def testar_cobranca():
         logging.exception("❌ Erro ao testar cobrança:")
         return {"error": str(e)}
 
-# ============================================================
-# ⚙️ ENDPOINT PARA CONFIGURAR COBRANÇA
-# ============================================================
-@app.post("/cobranca-config")
-async def salvar_configuracao_cobranca(config: ConfiguracaoCobranca):
-    """
-    Salva configurações de cobrança
-    """
-    import json
-    from pathlib import Path
-    
-    config_file = Path(__file__).parent / "cobranca_config.json"
-    
-    try:
-        with open(config_file, 'w', encoding='utf-8') as f:
-            json.dump(config.dict(), f, indent=2, ensure_ascii=False)
-        logging.info(f"✅ Configuração de cobrança salva: ativo={config.ativo}, lembretes={len(config.lembretes)}")
-        return {"success": True}
-    except Exception as e:
-        logging.error(f"❌ Erro ao salvar configuração de cobrança: {e}")
-        return {"success": False, "error": str(e)}
 
 @app.get("/cobranca-config")
 async def carregar_configuracao_cobranca_api():
     """
-    Carrega configurações de cobrança
+    Carrega configurações de cobrança do Supabase
     """
+    try:
+        from supabase_client import buscar_configuracao_cobranca
+        config_supabase = buscar_configuracao_cobranca()
+        
+        if config_supabase:
+            logging.info(f"✅ Configuração carregada do Supabase: {len(config_supabase.get('lembretes', []))} lembretes")
+            return {
+                "ativo": config_supabase.get("ativo", False),
+                "horario_execucao": config_supabase.get("horario_execucao", "09:00"),
+                "lembretes": config_supabase.get("lembretes", [])
+            }
+    except Exception as e:
+        logging.warning(f"⚠️ Erro ao carregar configuração do Supabase: {e}")
+    
+    # Fallback para arquivo JSON
     import json
     from pathlib import Path
     
@@ -627,22 +621,14 @@ async def carregar_configuracao_cobranca_api():
         try:
             with open(config_file, 'r', encoding='utf-8') as f:
                 config = json.load(f)
+                logging.info(f"✅ Configuração carregada do JSON: {len(config.get('lembretes', []))} lembretes")
                 return config
         except Exception as e:
             logging.error(f"❌ Erro ao carregar configuração de cobrança: {e}")
             return {"ativo": False, "lembretes": []}
     
     # Configuração padrão
-    return {
-        "ativo": False,
-        "lembretes": [
-            {
-                "dias_antes": 5,
-                "mensagem": "Olá {cliente}, seu boleto vence em {dias} dias. Valor: R$ {valor}",
-                "enviar_segunda_via": True
-            }
-        ]
-    }
+    return {"ativo": False, "horario_execucao": "09:00", "lembretes": []}
 
 # ============================================================
 # 🌐 WEBHOOK WHATSAPP CLOUD API (VERIFICAÇÃO)
