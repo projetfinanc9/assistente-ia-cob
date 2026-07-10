@@ -509,10 +509,12 @@ async def testar_cobranca():
                                 # Enviar PDF como documento
                                 filename = f"boleto_{titulo_id}_{parcela_id}.pdf"
                                 logging.warning(f"📤 Enviando PDF via WhatsApp para {numero}")
+                                logging.warning(f"🆔 histórico_id: {historico_id}")
                                 try:
                                     send_whatsapp_document(numero, pdf_content, filename, mensagem)
                                     logging.warning(f"✅ PDF enviado com sucesso para {numero}")
                                     # Atualizar status no histórico
+                                    logging.warning(f"🔄 Atualizando status no Supabase...")
                                     try:
                                         from supabase_client import atualizar_historico_cobranca
                                         atualizar_historico_cobranca(historico_id, {
