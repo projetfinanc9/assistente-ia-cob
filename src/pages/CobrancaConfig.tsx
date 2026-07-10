@@ -74,6 +74,8 @@ const CobrancaConfig = () => {
       console.log('📦 Dados da resposta:', data);
       if (data.success) {
         setMessage('✅ Configurações salvas com sucesso!');
+        // Recarregar configuração do Supabase
+        await loadConfig();
       } else {
         setMessage(`❌ Erro: ${data.error}`);
       }
