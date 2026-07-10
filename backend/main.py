@@ -471,7 +471,7 @@ async def testar_cobranca():
                 try:
                     from supabase_client import salvar_historico_cobranca
                     from datetime import datetime
-                    historico_id = salvar_historico_cobranca({
+                    historico_salvo = salvar_historico_cobranca({
                         "cliente_id": boleto.get("cliente_id"),
                         "cliente_nome": boleto.get("cliente_nome"),
                         "cliente_telefone": boleto.get("cliente_telefone"),
@@ -485,6 +485,8 @@ async def testar_cobranca():
                         "status": "pendente",
                         "tipo_envio": "pdf" if boleto.get("enviar_segunda_via") else "texto"
                     })
+                    # Extrair apenas o UUID do dicionário retornado
+                    historico_id = historico_salvo.get("id") if isinstance(historico_salvo, dict) else historico_salvo
                     logging.warning(f"💾 Histórico salvo no Supabase: {historico_id}")
                 except Exception as e:
                     logging.warning(f"⚠️ Erro ao salvar histórico: {e}")
