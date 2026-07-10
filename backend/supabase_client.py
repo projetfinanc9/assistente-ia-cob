@@ -102,14 +102,36 @@ def salvar_log_mensagem(dados_log: dict):
 
 def buscar_configuracao_cobranca():
     """
-    Busca configuração de cobrança do banco de dados
+    Busca configuração de cobrança do banco de dados com lembretes separados
     """
     if not supabase:
         return None
     
     try:
-        response = supabase.table("configuracoes_cobranca").select("*").limit(1).execute()
-        return response.data[0] if response.data else None
+        # Buscar configuração
+        response_config = supabase.table("configuracoes_cobranca").select("*").limit(1).execute()
+        
+        if not response_config.data:
+            return None
+        
+        config = response_config.data[0]
+        configuracao_id = config["id"]
+        
+        # Buscar lembretes da tabela separada
+        response_lembretes = supabase.table("lembretes_cobranca").select("*").eq("configuracao_id", configuracao_id).execute()
+        
+        # Adicionar lembretes à configuração
+        lembretes = []
+        if response_lembretes.data:
+            for lembrete in response_lembretes.data:
+                lembretes.append({
+                    "dias_antes": lembrete["dias_antes"],
+                    "mensagem": lembrete["mensagem"],
+                    "enviar_segunda_via": lembrete["enviar_segunda_via"]
+                })
+        
+        config["lembretes"] = lembretes
+        return config
     except Exception as e:
         print(f"❌ Erro ao buscar configuração de cobrança: {e}")
         return None
@@ -117,7 +139,7 @@ def buscar_configuracao_cobranca():
 
 def salvar_configuracao_cobranca(dados_config: dict):
     """
-    Salva ou atualiza configuração de cobrança
+    Salva ou atualiza configuração de cobrança com lembretes em tabela separada
     """
     if not supabase:
         print("⚠️ Cliente Supabase não inicializado")
@@ -125,19 +147,53 @@ def salvar_configuracao_cobranca(dados_config: dict):
     
     try:
         print(f"📝 Tentando salvar configuração: {dados_config}")
+        
+        # Extrair lembretes dos dados
+        lembretes = dados_config.pop("lembretes", [])
+        
         # Verifica se já existe configuração
         config_existente = buscar_configuracao_cobranca()
         
         if config_existente:
             print(f"🔄 Atualizando configuração existente ID: {config_existente['id']}")
-            # Atualiza configuração existente
-            response = supabase.table("configuracoes_cobranca").update(dados_config).eq("id", config_existente["id"]).execute()
-            print(f"✅ Configuração atualizada: {response.data}")
+            configuracao_id = config_existente["id"]
+            
+            # Atualiza configuração existente (sem lembretes)
+            response = supabase.table("configuracoes_cobranca").update(dados_config).eq("id", configuracao_id).execute()
+            
+            # Deletar lembretes antigos
+            supabase.table("lembretes_cobranca").delete().eq("configuracao_id", configuracao_id).execute()
+            
+            # Inserir novos lembretes
+            for lembrete in lembretes:
+                supabase.table("lembretes_cobranca").insert({
+                    "configuracao_id": configuracao_id,
+                    "dias_antes": lembrete["dias_antes"],
+                    "mensagem": lembrete["mensagem"],
+                    "enviar_segunda_via": lembrete["enviar_segunda_via"]
+                }).execute()
+            
+            print(f"✅ Configuração atualizada com {len(lembretes)} lembretes")
             return response.data[0] if response.data else None
         else:
             print(f"➕ Criando nova configuração")
-            # Cria nova configuração
+            # Cria nova configuração (sem lembretes)
             response = supabase.table("configuracoes_cobranca").insert(dados_config).execute()
+            
+            if response.data:
+                configuracao_id = response.data[0]["id"]
+                
+                # Inserir lembretes
+                for lembrete in lembretes:
+                    supabase.table("lembretes_cobranca").insert({
+                        "configuracao_id": configuracao_id,
+                        "dias_antes": lembrete["dias_antes"],
+                        "mensagem": lembrete["mensagem"],
+                        "enviar_segunda_via": lembrete["enviar_segunda_via"]
+                    }).execute()
+                
+                print(f"✅ Configuração criada com {len(lembretes)} lembretes")
+            
             return response.data[0] if response.data else None
     except Exception as e:
         print(f"❌ Erro ao salvar configuração de cobrança: {e}")
