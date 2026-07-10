@@ -303,7 +303,11 @@ def verificar_boletos_vencendo() -> List[Dict]:
     
     # Buscar parcelas que vencem no range configurado usando API Bulk-data
     hoje = datetime.now()
-    data_inicio = (hoje + timedelta(days=dias_min)).strftime("%Y-%m-%d")
+    # Se tiver dias positivos (depois do vencimento), buscar boletos vencidos há mais tempo
+    if dias_max > 0:
+        data_inicio = (hoje + timedelta(days=dias_min - dias_max)).strftime("%Y-%m-%d")
+    else:
+        data_inicio = (hoje + timedelta(days=dias_min)).strftime("%Y-%m-%d")
     data_fim = (hoje + timedelta(days=dias_max)).strftime("%Y-%m-%d")
     
     logging.warning(f"📅 Buscando parcelas via Bulk-data: {data_inicio} até {data_fim}")
