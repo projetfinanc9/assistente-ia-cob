@@ -195,6 +195,8 @@ const CobrancaConfig = () => {
                   type="number"
                   value={lembrete.dias_antes}
                   onChange={(e) => updateLembrete(index, 'dias_antes', parseInt(e.target.value))}
+                  min="-365"
+                  max="365"
                 />
                 <p className="text-xs text-muted-foreground">
                   Negativo = antes (ex: -5), 0 = dia do vencimento, Positivo = depois (ex: 5)
