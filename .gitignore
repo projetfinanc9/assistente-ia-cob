@@ -13,7 +13,7 @@ dist-ssr
 *.local
 
 # Environment (comentar para permitir commit em produção)
-#.env
+.env
 
 # Editor directories and files
 .vscode/*
