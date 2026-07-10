@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, HTMLResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import logging, re, base64, os
@@ -836,6 +836,94 @@ async def webhook_whatsapp(request: Request):
         return {"status": "error", "detail": str(e)}
 
     return {"status": "ok"}
+
+
+# ============================================================
+# 📄 POLÍTICA DE PRIVACIDADE
+# ============================================================
+@app.get("/privacy-policy")
+async def privacy_policy():
+    """
+    Endpoint de Política de Privacidade para publicação do app no Meta
+    """
+    html_content = """
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Política de Privacidade - Constru.IA Connect</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 20px;
+                line-height: 1.6;
+            }
+            h1 {
+                color: #333;
+            }
+            h2 {
+                color: #555;
+                margin-top: 30px;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Política de Privacidade - Constru.IA Connect</h1>
+        <p><strong>Última atualização:</strong> 10 de Julho de 2026</p>
+        
+        <h2>1. Informações que Coletamos</h2>
+        <p>O Constru.IA Connect coleta as seguintes informações:</p>
+        <ul>
+            <li>Número de telefone do WhatsApp (para envio de mensagens)</li>
+            <li>CPF ou CNPJ (para busca de boletos e cobranças)</li>
+            <li>Dados de boletos e cobranças (obtidos da API Sienge)</li>
+        </ul>
+        
+        <h2>2. Como Usamos as Informações</h2>
+        <p>Usamos as informações coletadas para:</p>
+        <ul>
+            <li>Enviar lembretes de cobrança via WhatsApp</li>
+            <li>Buscar e gerar segundas vias de boletos</li>
+            <li>Gerenciar contas a receber</li>
+        </ul>
+        
+        <h2>3. Compartilhamento de Informações</h2>
+        <p>Não compartilhamos suas informações pessoais com terceiros, exceto quando necessário para:</p>
+        <ul>
+            <li>Integração com a API Sienge (para dados de cobranças)</li>
+            <li>Integração com a API WhatsApp Cloud (para envio de mensagens)</li>
+        </ul>
+        
+        <h2>4. Segurança dos Dados</h2>
+        <p>Implementamos medidas de segurança para proteger suas informações, incluindo:</p>
+        <ul>
+            <li>Criptografia de dados em trânsito</li>
+            <li>Controle de acesso restrito</li>
+            <li>Monitoramento de segurança</li>
+        </ul>
+        
+        <h2>5. Seus Direitos</h2>
+        <p>Você tem o direito de:</p>
+        <ul>
+            <li>Acessar suas informações pessoais</li>
+            <li>Solicitar a exclusão de seus dados</li>
+            <li>Corrigir informações incorretas</li>
+        </ul>
+        
+        <h2>6. Contato</h2>
+        <p>Para questões sobre esta política de privacidade, entre em contato:</p>
+        <p>Email: projetfinanc9@gmail.com</p>
+        
+        <h2>7. Alterações a esta Política</h2>
+        <p>Reservamos o direito de atualizar esta política de privacidade. Notificaremos os usuários sobre alterações significativas.</p>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
 
 # ============================================================
 # 🤖 WEBHOOK WHATSAPP VIA TWILIO
