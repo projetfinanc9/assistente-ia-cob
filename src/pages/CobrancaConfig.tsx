@@ -61,6 +61,7 @@ const CobrancaConfig = () => {
     setMessage('');
     const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
     console.log('📝 Tentando salvar configuração:', config);
+    console.log('📋 Lembretes sendo salvos:', config.lembretes);
     console.log('🌐 API URL:', API_URL);
     try {
       console.log('📡 Fazendo requisição POST para:', `${API_URL}/cobranca-config`);
