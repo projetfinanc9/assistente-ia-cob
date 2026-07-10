@@ -55,17 +55,32 @@ def salvar_cache(cache_key: str, data: Dict):
 logging.warning("🔔 Rodando módulo sienge_cobranca.py (sistema de cobrança automática com suporte a CNPJ)")
 
 # ============================================================
-# 💾 CONFIGURAÇÕES DE COBRANÇA
+# 💾 CONFIGURAÇÕES DE COBRANÇA (MIGRADO PARA SUPABASE)
 # ============================================================
 COBRANCA_CONFIG_FILE = Path(__file__).parent.parent / "cobranca_config.json"
 
 def carregar_configuracao_cobranca():
-    """Carrega configurações de cobrança do arquivo JSON"""
+    """Carrega configurações de cobrança do Supabase (com fallback para JSON)"""
+    try:
+        from supabase_client import buscar_configuracao_cobranca
+        config_supabase = buscar_configuracao_cobranca()
+        
+        if config_supabase:
+            logging.info(f"✅ Configuração de cobrança carregada do Supabase: {len(config_supabase.get('lembretes', []))} lembretes")
+            return {
+                "ativo": config_supabase.get("ativo", False),
+                "horario_execucao": config_supabase.get("horario_execucao", "09:00"),
+                "lembretes": config_supabase.get("lembretes", [])
+            }
+    except Exception as e:
+        logging.warning(f"⚠️ Erro ao carregar configuração do Supabase: {e}")
+    
+    # Fallback para arquivo JSON
     if COBRANCA_CONFIG_FILE.exists():
         try:
             with open(COBRANCA_CONFIG_FILE, 'r', encoding='utf-8') as f:
                 config = json.load(f)
-                logging.info(f"✅ Configuração de cobrança carregada: {len(config.get('lembretes', []))} lembretes")
+                logging.info(f"✅ Configuração de cobrança carregada do JSON: {len(config.get('lembretes', []))} lembretes")
                 return config
         except Exception as e:
             logging.warning(f"⚠️ Erro ao carregar configuração de cobrança: {e}")

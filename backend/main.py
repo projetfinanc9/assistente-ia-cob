@@ -406,22 +406,32 @@ async def mensagem(msg: Message):
 @app.get("/cobranca-historico")
 async def listar_historico_cobrancas():
     """
-    Endpoint para listar histórico de cobranças
+    Endpoint para listar histórico de cobranças do Supabase
     """
-    # Por enquanto, retorna um histórico simulado
-    # Em produção, isso deve vir de um banco de dados
-    return {
-        "historico": [
-            {
-                "id": "1",
-                "cliente": "IGOR KAIKY",
-                "telefone": "559193808761",
-                "data": "2026-07-09T09:00:00",
-                "status": "enviado",
-                "mensagem": "Olá IGOR KAIKY, seu boleto vence em 10 dias. Valor: R$ 10,00"
-            }
-        ]
-    }
+    try:
+        from supabase_client import buscar_historico_cobrancas
+        historico = buscar_historico_cobrancas()
+        
+        # Formatar dados para o frontend
+        historico_formatado = []
+        for item in historico:
+            historico_formatado.append({
+                "id": item.get("id"),
+                "cliente": item.get("cliente_nome"),
+                "telefone": item.get("cliente_telefone"),
+                "data": item.get("created_at"),
+                "status": item.get("status"),
+                "mensagem": item.get("mensagem_enviada"),
+                "vencimento": item.get("vencimento"),
+                "valor": item.get("valor"),
+                "tipo_envio": item.get("tipo_envio")
+            })
+        
+        return {"historico": historico_formatado}
+    except Exception as e:
+        logging.error(f"❌ Erro ao buscar histórico de cobranças: {e}")
+        # Fallback para histórico vazio em caso de erro
+        return {"historico": []}
 
 @app.post("/testar-cobranca")
 async def testar_cobranca():
@@ -438,6 +448,47 @@ async def testar_cobranca():
         for boleto in boletos:
             if boleto.get("cliente_telefone"):
                 mensagem = gerar_mensagem_cobranca(boleto)
+                
+                # Verificar se cobrança já foi enviada (evitar duplicação via Supabase)
+                try:
+                    from supabase_client import verificar_cobranca_enviada
+                    titulo_id = boleto.get("titulo_id")
+                    parcela_id = boleto.get("parcela_id")
+                    dias_antes = boleto.get("dias_antes")
+                    
+                    if verificar_cobranca_enviada(titulo_id, parcela_id, dias_antes):
+                        logging.warning(f"⏭️ Cobrança já enviada para {boleto.get('cliente_nome')}, ignorando")
+                        resultados.append({
+                            "cliente": boleto.get("cliente_nome"),
+                            "telefone": numero,
+                            "status": "já enviado (duplicado)",
+                        })
+                        continue
+                except Exception as e:
+                    logging.warning(f"⚠️ Erro ao verificar duplicação: {e}")
+                
+                # Salvar registro no histórico antes de enviar
+                try:
+                    from supabase_client import salvar_historico_cobranca
+                    from datetime import datetime
+                    historico_id = salvar_historico_cobranca({
+                        "cliente_id": boleto.get("cliente_id"),
+                        "cliente_nome": boleto.get("cliente_nome"),
+                        "cliente_telefone": boleto.get("cliente_telefone"),
+                        "titulo_id": boleto.get("titulo_id"),
+                        "parcela_id": boleto.get("parcela_id"),
+                        "vencimento": boleto.get("vencimento"),
+                        "valor": boleto.get("valor"),
+                        "dias_antes": boleto.get("dias_antes"),
+                        "mensagem_template": boleto.get("mensagem_template"),
+                        "mensagem_enviada": mensagem,
+                        "status": "pendente",
+                        "tipo_envio": "pdf" if boleto.get("enviar_segunda_via") else "texto"
+                    })
+                    logging.warning(f"💾 Histórico salvo no Supabase: {historico_id}")
+                except Exception as e:
+                    logging.warning(f"⚠️ Erro ao salvar histórico: {e}")
+                
                 # Enviar via WhatsApp Cloud API se configurado
                 if WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN:
                     numero = re.sub(r"\D", "", boleto["cliente_telefone"])
@@ -458,6 +509,15 @@ async def testar_cobranca():
                                 # Enviar PDF como documento
                                 filename = f"boleto_{titulo_id}_{parcela_id}.pdf"
                                 send_whatsapp_document(numero, pdf_content, filename, mensagem)
+                                # Atualizar status no histórico
+                                try:
+                                    from supabase_client import atualizar_historico_cobranca
+                                    atualizar_historico_cobranca(historico_id, {
+                                        "status": "enviado",
+                                        "enviado_em": datetime.now().isoformat()
+                                    })
+                                except Exception as e:
+                                    logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
                                 resultados.append({
                                     "cliente": boleto.get("cliente_nome"),
                                     "telefone": numero,
@@ -467,6 +527,17 @@ async def testar_cobranca():
                             else:
                                 # Se falhar ao baixar PDF, enviar apenas mensagem
                                 send_whatsapp_cloud_message(numero, mensagem)
+                                # Atualizar status no histórico
+                                try:
+                                    from supabase_client import atualizar_historico_cobranca
+                                    atualizar_historico_cobranca(historico_id, {
+                                        "status": "enviado",
+                                        "tipo_envio": "texto",
+                                        "erro_mensagem": "PDF falhou, enviado como texto",
+                                        "enviado_em": datetime.now().isoformat()
+                                    })
+                                except Exception as e:
+                                    logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
                                 resultados.append({
                                     "cliente": boleto.get("cliente_nome"),
                                     "telefone": numero,
@@ -476,6 +547,15 @@ async def testar_cobranca():
                         else:
                             # Enviar apenas mensagem de texto
                             send_whatsapp_cloud_message(numero, mensagem)
+                            # Atualizar status no histórico
+                            try:
+                                from supabase_client import atualizar_historico_cobranca
+                                atualizar_historico_cobranca(historico_id, {
+                                    "status": "enviado",
+                                    "enviado_em": datetime.now().isoformat()
+                                })
+                            except Exception as e:
+                                logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
                             resultados.append({
                                 "cliente": boleto.get("cliente_nome"),
                                 "telefone": numero,
@@ -787,6 +867,20 @@ async def webhook_whatsapp(request: Request):
         # Inicializar text com valor padrão (proteção contra UnboundLocalError)
         text = msg.get("text", {}).get("body", "")
         
+        # Salvar log de mensagem recebida no Supabase
+        try:
+            from supabase_client import salvar_log_mensagem
+            salvar_log_mensagem({
+                "usuario_id": f"whatsapp:{from_number}",
+                "telefone": from_number,
+                "mensagem_recebida": text,
+                "mensagem_enviada": None,
+                "tipo": "recebida",
+                "status": "sucesso"
+            })
+        except Exception as e:
+            logging.warning(f"⚠️ Erro ao salvar log de mensagem recebida: {e}")
+        
         # Verifica se é uma resposta de botão interativo
         interactive = msg.get("interactive")
         if interactive and interactive.get("type") == "button_reply":
@@ -848,6 +942,20 @@ async def webhook_whatsapp(request: Request):
         logging.info(f"📤 Enviando resposta para {from_number}...")
         send_whatsapp_cloud_message(from_number, texto_resposta, botoes, list_items)
         logging.info(f"✅ Resposta enviada com sucesso")
+        
+        # Salvar log de mensagem enviada no Supabase
+        try:
+            from supabase_client import salvar_log_mensagem
+            salvar_log_mensagem({
+                "usuario_id": f"whatsapp:{from_number}",
+                "telefone": from_number,
+                "mensagem_recebida": text,
+                "mensagem_enviada": texto_resposta,
+                "tipo": "enviada",
+                "status": "sucesso"
+            })
+        except Exception as e:
+            logging.warning(f"⚠️ Erro ao salvar log de mensagem enviada: {e}")
 
     except Exception as e:
         logging.exception("❌ Erro ao processar webhook WhatsApp:")
@@ -1088,7 +1196,7 @@ def salvar_configuracao_cobranca(config: dict):
 
 @app.post("/cobranca-config")
 def save_cobranca_config(config: ConfiguracaoCobranca):
-    """Salva novas configurações de cobrança automática"""
+    """Salva novas configurações de cobrança automática no Supabase"""
     try:
         config_dict = {
             "ativo": config.ativo,
@@ -1103,7 +1211,20 @@ def save_cobranca_config(config: ConfiguracaoCobranca):
             ]
         }
         
-        sucesso = salvar_configuracao_cobranca(config_dict)
+        # Salvar no Supabase
+        try:
+            from supabase_client import salvar_configuracao_cobranca
+            resultado = salvar_configuracao_cobranca(config_dict)
+            if not resultado:
+                logging.warning("⚠️ Falha ao salvar no Supabase, tentando salvar localmente")
+                sucesso = salvar_configuracao_cobranca(config_dict)
+            else:
+                sucesso = True
+                logging.info("✅ Configuração salva no Supabase")
+        except Exception as e:
+            logging.warning(f"⚠️ Erro ao salvar no Supabase: {e}, tentando salvar localmente")
+            sucesso = salvar_configuracao_cobranca(config_dict)
+        
         if not sucesso:
             return {"success": False, "error": "Erro ao salvar configurações"}
         
