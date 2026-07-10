@@ -120,17 +120,22 @@ def salvar_configuracao_cobranca(dados_config: dict):
     Salva ou atualiza configuração de cobrança
     """
     if not supabase:
+        print("⚠️ Cliente Supabase não inicializado")
         return None
     
     try:
+        print(f"📝 Tentando salvar configuração: {dados_config}")
         # Verifica se já existe configuração
         config_existente = buscar_configuracao_cobranca()
         
         if config_existente:
+            print(f"🔄 Atualizando configuração existente ID: {config_existente['id']}")
             # Atualiza configuração existente
             response = supabase.table("configuracoes_cobranca").update(dados_config).eq("id", config_existente["id"]).execute()
+            print(f"✅ Configuração atualizada: {response.data}")
             return response.data[0] if response.data else None
         else:
+            print(f"➕ Criando nova configuração")
             # Cria nova configuração
             response = supabase.table("configuracoes_cobranca").insert(dados_config).execute()
             return response.data[0] if response.data else None
