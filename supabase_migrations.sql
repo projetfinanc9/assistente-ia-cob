@@ -33,6 +33,7 @@ END $$;
 -- ============================================================
 -- TABELA: lembretes_cobranca
 -- Armazena lembretes de cobrança (um por linha)
+-- dias_antes: negativo = antes do vencimento, 0 = dia do vencimento, positivo = depois
 -- ============================================================
 CREATE TABLE IF NOT EXISTS lembretes_cobranca (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -167,22 +168,37 @@ ALTER TABLE logs_mensagens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clientes_cache ENABLE ROW LEVEL SECURITY;
 
 -- Políticas RLS (ajuste conforme necessário)
+DROP POLICY IF EXISTS "Permitir leitura pública" ON configuracoes_cobranca;
+DROP POLICY IF EXISTS "Permitir inserção pública" ON configuracoes_cobranca;
+DROP POLICY IF EXISTS "Permitir atualização pública" ON configuracoes_cobranca;
 CREATE POLICY "Permitir leitura pública" ON configuracoes_cobranca FOR SELECT USING (true);
 CREATE POLICY "Permitir inserção pública" ON configuracoes_cobranca FOR INSERT WITH CHECK (true);
 CREATE POLICY "Permitir atualização pública" ON configuracoes_cobranca FOR UPDATE USING (true);
 
+DROP POLICY IF EXISTS "Permitir leitura pública" ON lembretes_cobranca;
+DROP POLICY IF EXISTS "Permitir inserção pública" ON lembretes_cobranca;
+DROP POLICY IF EXISTS "Permitir atualização pública" ON lembretes_cobranca;
+DROP POLICY IF EXISTS "Permitir deleção pública" ON lembretes_cobranca;
 CREATE POLICY "Permitir leitura pública" ON lembretes_cobranca FOR SELECT USING (true);
 CREATE POLICY "Permitir inserção pública" ON lembretes_cobranca FOR INSERT WITH CHECK (true);
 CREATE POLICY "Permitir atualização pública" ON lembretes_cobranca FOR UPDATE USING (true);
 CREATE POLICY "Permitir deleção pública" ON lembretes_cobranca FOR DELETE USING (true);
 
+DROP POLICY IF EXISTS "Permitir leitura pública" ON historico_cobrancas;
+DROP POLICY IF EXISTS "Permitir inserção pública" ON historico_cobrancas;
+DROP POLICY IF EXISTS "Permitir atualização pública" ON historico_cobrancas;
 CREATE POLICY "Permitir leitura pública" ON historico_cobrancas FOR SELECT USING (true);
 CREATE POLICY "Permitir inserção pública" ON historico_cobrancas FOR INSERT WITH CHECK (true);
 CREATE POLICY "Permitir atualização pública" ON historico_cobrancas FOR UPDATE USING (true);
 
+DROP POLICY IF EXISTS "Permitir leitura pública" ON logs_mensagens;
+DROP POLICY IF EXISTS "Permitir inserção pública" ON logs_mensagens;
 CREATE POLICY "Permitir leitura pública" ON logs_mensagens FOR SELECT USING (true);
 CREATE POLICY "Permitir inserção pública" ON logs_mensagens FOR INSERT WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Permitir leitura pública" ON clientes_cache;
+DROP POLICY IF EXISTS "Permitir inserção pública" ON clientes_cache;
+DROP POLICY IF EXISTS "Permitir atualização pública" ON clientes_cache;
 CREATE POLICY "Permitir leitura pública" ON clientes_cache FOR SELECT USING (true);
 CREATE POLICY "Permitir inserção pública" ON clientes_cache FOR INSERT WITH CHECK (true);
 CREATE POLICY "Permitir atualização pública" ON clientes_cache FOR UPDATE USING (true);

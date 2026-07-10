@@ -190,12 +190,15 @@ const CobrancaConfig = () => {
               </div>
 
               <div className="space-y-2">
-                <Label>Dias antes do vencimento</Label>
+                <Label>Dias em relação ao vencimento</Label>
                 <Input
                   type="number"
                   value={lembrete.dias_antes}
                   onChange={(e) => updateLembrete(index, 'dias_antes', parseInt(e.target.value))}
                 />
+                <p className="text-xs text-muted-foreground">
+                  Negativo = antes (ex: -5), 0 = dia do vencimento, Positivo = depois (ex: 5)
+                </p>
               </div>
 
               <div className="space-y-2">

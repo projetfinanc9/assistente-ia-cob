@@ -89,12 +89,12 @@ def carregar_configuracao_cobranca():
         "ativo": False,
         "lembretes": [
             {
-                "dias_antes": 5,
-                "mensagem": "Olá {cliente}, seu boleto vence em {dias} dias. Valor: R$ {valor}",
+                "dias_antes": -5,
+                "mensagem": "Olá {cliente}, seu boleto vence em 5 dias. Valor: R$ {valor}",
                 "enviar_segunda_via": True
             },
             {
-                "dias_antes": 1,
+                "dias_antes": -1,
                 "mensagem": "Olá {cliente}, seu boleto vence amanhã! Valor: R$ {valor}",
                 "enviar_segunda_via": True
             }
