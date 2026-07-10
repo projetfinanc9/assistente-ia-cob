@@ -48,6 +48,8 @@ const CobrancaConfig = () => {
     try {
       const response = await fetch(`${API_URL}/cobranca-config`);
       const data = await response.json();
+      console.log('📥 Configuração carregada do backend:', data);
+      console.log('📋 Lembretes carregados:', data.lembretes);
       setConfig(data);
     } catch (error) {
       console.error('Erro ao carregar configuração:', error);
