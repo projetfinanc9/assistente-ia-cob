@@ -1145,29 +1145,43 @@ def root():
 @app.get("/config")
 def get_config():
     """Retorna configurações atuais do Sienge"""
-    from sienge.sienge_config import subdominio, usuario
-    # Não retornamos a senha por segurança
-    return {
-        "subdomain": subdominio,
-        "username": usuario,
-        "password": ""  # Não expor a senha
-    }
+    try:
+        from supabase_client import buscar_configuracao_sienge
+        config = buscar_configuracao_sienge()
+        
+        if config:
+            # Não retornamos a senha por segurança
+            return {
+                "subdomain": config.get("subdomain"),
+                "username": config.get("username"),
+                "password": ""  # Não expor a senha
+            }
+        else:
+            # Retorna configurações padrão se não existir
+            from sienge.sienge_config import subdominio, usuario
+            return {
+                "subdomain": subdominio,
+                "username": usuario,
+                "password": ""  # Não expor a senha
+            }
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.post("/config")
 def save_config(config: SiengeConfig):
-    """Salva novas configurações do Sienge"""
+    """Salva novas configurações do Sienge no Supabase"""
     try:
-        # Salva no arquivo JSON
-        from sienge.sienge_config import salvar_configuracoes
-        sucesso = salvar_configuracoes(config.subdomain, config.username, config.password)
+        from supabase_client import salvar_configuracao_sienge
         
-        if not sucesso:
-            return {"success": False, "error": "Erro ao salvar configurações no arquivo"}
+        # Salva no Supabase
+        resultado = salvar_configuracao_sienge({
+            "subdomain": config.subdomain,
+            "username": config.username,
+            "password": config.password
+        })
         
-        # Atualizar variáveis de ambiente
-        os.environ["SIENGE_SUBDOMINIO"] = config.subdomain
-        os.environ["SIENGE_USUARIO"] = config.username
-        os.environ["SIENGE_SENHA"] = config.password
+        if not resultado:
+            return {"success": False, "error": "Erro ao salvar configurações no Supabase"}
         
         # Recarregar configurações
         import importlib
@@ -1181,7 +1195,7 @@ def save_config(config: SiengeConfig):
         importlib.reload(sienge_financeiro)
         importlib.reload(sienge_cobranca)
         
-        logging.info(f"✅ Configurações atualizadas e persistidas: {config.subdomain}")
+        logging.info(f"✅ Configurações atualizadas e persistidas no Supabase: {config.subdomain}")
         return {"success": True, "message": "Configurações salvas com sucesso"}
     except Exception as e:
         logging.error(f"❌ Erro ao salvar configurações: {e}")

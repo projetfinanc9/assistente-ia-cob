@@ -202,3 +202,41 @@ DROP POLICY IF EXISTS "Permitir atualização pública" ON clientes_cache;
 CREATE POLICY "Permitir leitura pública" ON clientes_cache FOR SELECT USING (true);
 CREATE POLICY "Permitir inserção pública" ON clientes_cache FOR INSERT WITH CHECK (true);
 CREATE POLICY "Permitir atualização pública" ON clientes_cache FOR UPDATE USING (true);
+
+-- ============================================================
+-- TABELA configuracoes_sienge
+-- ============================================================
+DROP TABLE IF EXISTS configuracoes_sienge CASCADE;
+
+CREATE TABLE configuracoes_sienge (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    subdomain TEXT NOT NULL,
+    username TEXT NOT NULL,
+    password TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Trigger para atualizar updated_at automaticamente
+DROP TRIGGER IF EXISTS trigger_configuracoes_sienge_updated_at ON configuracoes_sienge;
+CREATE TRIGGER trigger_configuracoes_sienge_updated_at
+BEFORE UPDATE ON configuracoes_sienge
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+-- Índices
+CREATE INDEX idx_configuracoes_sienge_id ON configuracoes_sienge(id);
+
+-- RLS (Row Level Security)
+ALTER TABLE configuracoes_sienge ENABLE ROW LEVEL SECURITY;
+
+-- Políticas RLS
+DROP POLICY IF EXISTS "Permitir leitura pública" ON configuracoes_sienge;
+DROP POLICY IF EXISTS "Permitir inserção pública" ON configuracoes_sienge;
+DROP POLICY IF EXISTS "Permitir atualização pública" ON configuracoes_sienge;
+DROP POLICY IF EXISTS "Permitir deleção pública" ON configuracoes_sienge;
+
+CREATE POLICY "Permitir leitura pública" ON configuracoes_sienge FOR SELECT USING (true);
+CREATE POLICY "Permitir inserção pública" ON configuracoes_sienge FOR INSERT WITH CHECK (true);
+CREATE POLICY "Permitir atualização pública" ON configuracoes_sienge FOR UPDATE USING (true);
+CREATE POLICY "Permitir deleção pública" ON configuracoes_sienge FOR DELETE USING (true);

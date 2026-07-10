@@ -213,3 +213,50 @@ def verificar_cobranca_enviada(titulo_id: int, parcela_id: int, dias_antes: int)
     except Exception as e:
         print(f"❌ Erro ao verificar cobrança enviada: {e}")
         return False
+
+
+def buscar_configuracao_sienge():
+    """
+    Busca configuração do Sienge no Supabase
+    """
+    if not supabase:
+        return None
+    
+    try:
+        response = supabase.table("configuracoes_sienge").select("*").limit(1).execute()
+        return response.data[0] if response.data else None
+    except Exception as e:
+        print(f"❌ Erro ao buscar configuração do Sienge: {e}")
+        return None
+
+
+def salvar_configuracao_sienge(dados_config: dict):
+    """
+    Salva configuração do Sienge no Supabase
+    """
+    if not supabase:
+        return None
+    
+    try:
+        config_existente = buscar_configuracao_sienge()
+        
+        if config_existente:
+            # Atualizar configuração existente
+            configuracao_id = config_existente["id"]
+            response = supabase.table("configuracoes_sienge").update({
+                "subdomain": dados_config.get("subdomain"),
+                "username": dados_config.get("username"),
+                "password": dados_config.get("password")
+            }).eq("id", configuracao_id).execute()
+            return response.data[0] if response.data else None
+        else:
+            # Criar nova configuração
+            response = supabase.table("configuracoes_sienge").insert({
+                "subdomain": dados_config.get("subdomain"),
+                "username": dados_config.get("username"),
+                "password": dados_config.get("password")
+            }).execute()
+            return response.data[0] if response.data else None
+    except Exception as e:
+        print(f"❌ Erro ao salvar configuração do Sienge: {e}")
+        return None
