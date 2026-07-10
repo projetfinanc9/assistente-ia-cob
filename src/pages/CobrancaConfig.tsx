@@ -60,19 +60,25 @@ const CobrancaConfig = () => {
     setSaving(true);
     setMessage('');
     const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+    console.log('📝 Tentando salvar configuração:', config);
+    console.log('🌐 API URL:', API_URL);
     try {
+      console.log('📡 Fazendo requisição POST para:', `${API_URL}/cobranca-config`);
       const response = await fetch(`${API_URL}/cobranca-config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
       });
+      console.log('📊 Status da resposta:', response.status);
       const data = await response.json();
+      console.log('📦 Dados da resposta:', data);
       if (data.success) {
         setMessage('✅ Configurações salvas com sucesso!');
       } else {
         setMessage(`❌ Erro: ${data.error}`);
       }
     } catch (error) {
+      console.error('❌ Erro ao salvar configurações:', error);
       setMessage('❌ Erro ao salvar configurações');
     } finally {
       setSaving(false);
