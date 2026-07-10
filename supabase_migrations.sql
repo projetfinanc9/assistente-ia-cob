@@ -204,6 +204,17 @@ CREATE POLICY "Permitir inserção pública" ON clientes_cache FOR INSERT WITH C
 CREATE POLICY "Permitir atualização pública" ON clientes_cache FOR UPDATE USING (true);
 
 -- ============================================================
+-- FUNÇÃO update_updated_at_column (se não existir)
+-- ============================================================
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================
 -- TABELA configuracoes_sienge
 -- ============================================================
 DROP TABLE IF EXISTS configuracoes_sienge CASCADE;
