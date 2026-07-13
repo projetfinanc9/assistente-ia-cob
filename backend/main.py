@@ -29,6 +29,8 @@ async def executar_cobranca_agendada():
     logging.warning("⏰ Executando verificação agendada de cobranças...")
     try:
         from sienge.sienge_cobranca import verificar_boletos_vencendo, gerar_mensagem_cobranca
+        from supabase_client import salvar_historico_cobranca, atualizar_historico_cobranca
+        from datetime import datetime
         boletos = verificar_boletos_vencendo()
         
         if not boletos:
@@ -40,6 +42,30 @@ async def executar_cobranca_agendada():
         for boleto in boletos:
             if boleto.get("cliente_telefone"):
                 mensagem = gerar_mensagem_cobranca(boleto)
+                
+                # Salvar registro no histórico antes de enviar
+                try:
+                    historico_salvo = salvar_historico_cobranca({
+                        "cliente_id": boleto.get("cliente_id"),
+                        "cliente_nome": boleto.get("cliente_nome"),
+                        "cliente_telefone": boleto.get("cliente_telefone"),
+                        "titulo_id": boleto.get("titulo_id"),
+                        "parcela_id": boleto.get("parcela_id"),
+                        "vencimento": boleto.get("vencimento"),
+                        "valor": boleto.get("valor"),
+                        "dias_antes": boleto.get("dias_antes"),
+                        "mensagem_template": boleto.get("mensagem_template"),
+                        "mensagem_enviada": mensagem,
+                        "status": "pendente",
+                        "tipo_envio": "pdf" if boleto.get("envio_pdf") else "texto"
+                    })
+                    historico_id = historico_salvo.get("id") if isinstance(historico_salvo, dict) else historico_salvo
+                    logging.warning(f"💾 Histórico salvo no Supabase: {historico_id}")
+                except Exception as e:
+                    logging.warning(f"⚠️ Erro ao salvar histórico: {e}")
+                    historico_id = None
+                
+                # Enviar via WhatsApp Cloud API se configurado
                 if WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN:
                     numero = re.sub(r"\D", "", boleto["cliente_telefone"])
                     if len(numero) == 11 or len(numero) == 10:
@@ -47,6 +73,17 @@ async def executar_cobranca_agendada():
                     if numero.startswith("55"):
                         send_whatsapp_cloud_message(numero, mensagem)
                         logging.warning(f"✅ Mensagem enviada para {boleto['cliente_nome']}")
+                        
+                        # Atualizar status no histórico
+                        if historico_id:
+                            try:
+                                atualizar_historico_cobranca(historico_id, {
+                                    "status": "enviado",
+                                    "enviado_em": datetime.now().isoformat()
+                                })
+                                logging.warning(f"✅ Status atualizado para enviado")
+                            except Exception as e:
+                                logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
     except Exception as e:
         logging.error(f"❌ Erro na execução agendada: {e}", exc_info=True)
 
