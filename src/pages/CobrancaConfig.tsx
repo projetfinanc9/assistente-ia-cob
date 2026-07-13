@@ -61,6 +61,18 @@ const CobrancaConfig = () => {
       const data = await response.json();
       console.log('📥 Configuração carregada do backend:', data);
       console.log('📋 Lembretes carregados:', data.lembretes);
+      
+      // Garantir que lembretes tenham os campos novos
+      if (data.lembretes) {
+        const lembretesComCampos = data.lembretes.map((lembrete: any) => ({
+          ...lembrete,
+          envio_pdf: lembrete.envio_pdf ?? false,
+          envio_link: lembrete.envio_link ?? false,
+        }));
+        data.lembretes = lembretesComCampos;
+        console.log('📋 Lembretes com campos novos:', lembretesComCampos);
+      }
+      
       setConfig(data);
     } catch (error) {
       console.error('Erro ao carregar configuração:', error);

@@ -450,13 +450,13 @@ def gerar_mensagem_cobranca(boleto: Dict) -> str:
     if boleto.get("envio_link"):
         link_boleto = gerar_link_boleto(boleto["titulo_id"], boleto["parcela_id"])
         if link_boleto and not link_boleto.startswith("❌"):
-            mensagem += f"\n\n📄 **Link do boleto:** {link_boleto}"
+            mensagem += f"\n\n{link_boleto}"
     
     # Manter compatibilidade com enviar_segunda_via (legado)
     if boleto.get("enviar_segunda_via") and not boleto.get("envio_link"):
         link_boleto = gerar_link_boleto(boleto["titulo_id"], boleto["parcela_id"])
         if link_boleto and not link_boleto.startswith("❌"):
-            mensagem += f"\n\n📄 **Segunda via:** {link_boleto}"
+            mensagem += f"\n\n{link_boleto}"
     
     return mensagem
 
