@@ -505,7 +505,7 @@ async def testar_cobranca():
                         numero = "55" + numero
                     if numero.startswith("55"):
                         # Verificar se deve enviar PDF do boleto
-                        if boleto.get("enviar_segunda_via"):
+                        if boleto.get("envio_pdf"):
                             from sienge.sienge_cobranca import baixar_pdf_boleto
                             titulo_id = boleto.get("titulo_id")
                             parcela_id = boleto.get("parcela_id")
