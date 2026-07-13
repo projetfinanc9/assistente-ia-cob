@@ -9,9 +9,10 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Search, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface CobrancaHistory {
@@ -21,12 +22,19 @@ interface CobrancaHistory {
   data: string;
   status: string;
   mensagem: string;
+  vencimento?: string;
+  valor?: number;
+  tipo_envio?: string;
+  titulo_id?: number;
+  parcela_id?: number;
+  dias_antes?: number;
 }
 
 const History = () => {
   const [histories, setHistories] = useState<CobrancaHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedHistory, setSelectedHistory] = useState<CobrancaHistory | null>(null);
 
   useEffect(() => {
     loadHistories();
@@ -123,7 +131,11 @@ const History = () => {
                   </TableRow>
                 ) : (
                   filteredHistories.map((history) => (
-                    <TableRow key={history.id}>
+                    <TableRow 
+                      key={history.id} 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => setSelectedHistory(history)}
+                    >
                       <TableCell className="text-sm">
                         {formatDistanceToNow(new Date(history.data), {
                           addSuffix: true,
@@ -144,6 +156,88 @@ const History = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Modal de Detalhes */}
+      {selectedHistory && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Detalhes da Cobrança</CardTitle>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setSelectedHistory(null)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Cliente</p>
+                  <p className="font-semibold">{selectedHistory.cliente}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Telefone</p>
+                  <p className="font-mono">{selectedHistory.telefone}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Data/Hora do Envio</p>
+                  <p>{format(new Date(selectedHistory.data), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Status</p>
+                  {getStatusBadge(selectedHistory.status)}
+                </div>
+                {selectedHistory.titulo_id && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Número do Título</p>
+                    <p className="font-mono">{selectedHistory.titulo_id}</p>
+                  </div>
+                )}
+                {selectedHistory.parcela_id && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Número da Parcela</p>
+                    <p className="font-mono">{selectedHistory.parcela_id}</p>
+                  </div>
+                )}
+                {selectedHistory.vencimento && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Vencimento</p>
+                    <p>{format(new Date(selectedHistory.vencimento), "dd/MM/yyyy", { locale: ptBR })}</p>
+                  </div>
+                )}
+                {selectedHistory.valor && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Valor</p>
+                    <p className="font-semibold">R$ {selectedHistory.valor.toFixed(2)}</p>
+                  </div>
+                )}
+                {selectedHistory.dias_antes !== undefined && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Dias Antes/Depois</p>
+                    <p>{selectedHistory.dias_antes} dias</p>
+                  </div>
+                )}
+                {selectedHistory.tipo_envio && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Tipo de Envio</p>
+                    <p>{selectedHistory.tipo_envio}</p>
+                  </div>
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-2">Mensagem Enviada</p>
+                <div className="bg-muted p-4 rounded-md text-sm whitespace-pre-wrap">
+                  {selectedHistory.mensagem}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };

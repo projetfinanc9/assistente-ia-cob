@@ -424,7 +424,10 @@ async def listar_historico_cobrancas():
                 "mensagem": item.get("mensagem_enviada"),
                 "vencimento": item.get("vencimento"),
                 "valor": item.get("valor"),
-                "tipo_envio": item.get("tipo_envio")
+                "tipo_envio": item.get("tipo_envio"),
+                "titulo_id": item.get("titulo_id"),
+                "parcela_id": item.get("parcela_id"),
+                "dias_antes": item.get("dias_antes")
             })
         
         return {"historico": historico_formatado}
