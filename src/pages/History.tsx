@@ -10,8 +10,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Loader2, X } from "lucide-react";
+import { Search, Loader2, X, FileText, FileSpreadsheet } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Label } from "@/components/ui/label";
 import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -35,15 +36,28 @@ const History = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedHistory, setSelectedHistory] = useState<CobrancaHistory | null>(null);
+  const [dataInicio, setDataInicio] = useState("");
+  const [dataFim, setDataFim] = useState("");
 
   useEffect(() => {
     loadHistories();
   }, []);
 
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+  const buildParams = () => {
+    const p = new URLSearchParams();
+    if (dataInicio) p.append("data_inicio", dataInicio);
+    if (dataFim) p.append("data_fim", dataFim);
+    if (searchTerm) p.append("cliente", searchTerm);
+    return p.toString();
+  };
+
   const loadHistories = async () => {
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+    setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/cobranca-historico`);
+      const qs = buildParams();
+      const response = await fetch(`${API_URL}/cobranca-historico${qs ? `?${qs}` : ""}`);
       const data = await response.json();
       setHistories(data.historico || []);
     } catch (error) {
@@ -51,6 +65,18 @@ const History = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const exportar = (formato: "pdf" | "excel") => {
+    const qs = buildParams();
+    window.open(`${API_URL}/cobranca-historico/export/${formato}${qs ? `?${qs}` : ""}`, "_blank");
+  };
+
+  const limparFiltros = () => {
+    setDataInicio("");
+    setDataFim("");
+    setSearchTerm("");
+    setTimeout(loadHistories, 0);
   };
 
   const filteredHistories = histories.filter(
@@ -91,14 +117,35 @@ const History = () => {
       <Card>
         <CardHeader>
           <CardTitle>Envios de Cobrança</CardTitle>
-          <div className="flex items-center gap-2 mt-4">
-            <Search className="h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por cliente, telefone..."
-              className="max-w-sm"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+          <div className="flex flex-wrap items-end gap-3 mt-4">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="data-inicio" className="text-xs">Data início</Label>
+              <Input id="data-inicio" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="w-40" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="data-fim" className="text-xs">Data fim</Label>
+              <Input id="data-fim" type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="w-40" />
+            </div>
+            <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
+              <Label htmlFor="cliente" className="text-xs">Cliente / Telefone</Label>
+              <div className="flex items-center gap-2">
+                <Search className="h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="cliente"
+                  placeholder="Buscar por cliente, telefone..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+            </div>
+            <Button onClick={loadHistories}>Filtrar</Button>
+            <Button variant="outline" onClick={limparFiltros}>Limpar</Button>
+            <Button variant="outline" onClick={() => exportar("pdf")}>
+              <FileText className="h-4 w-4 mr-2" /> PDF
+            </Button>
+            <Button variant="outline" onClick={() => exportar("excel")}>
+              <FileSpreadsheet className="h-4 w-4 mr-2" /> Excel
+            </Button>
           </div>
         </CardHeader>
         <CardContent>

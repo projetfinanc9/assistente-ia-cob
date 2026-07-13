@@ -1,7 +1,8 @@
 from fastapi import FastAPI, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import PlainTextResponse, HTMLResponse
+from fastapi.responses import PlainTextResponse, HTMLResponse, StreamingResponse
+import io
 from pydantic import BaseModel
 from typing import List, Optional
 import logging, re, base64, os
@@ -619,6 +620,104 @@ async def listar_historico_cobrancas(
     except Exception as e:
         logging.error(f"❌ Erro ao buscar histórico de cobranças: {e}")
         return {"historico": []}
+
+def _filtrar_historico(data_inicio=None, data_fim=None, cliente=None):
+    from supabase_client import buscar_historico_cobrancas
+    historico = buscar_historico_cobrancas() or []
+    out = []
+    for item in historico:
+        item_data = item.get("created_at", "") or ""
+        if data_inicio and item_data < data_inicio:
+            continue
+        if data_fim and item_data > data_fim + "T23:59:59":
+            continue
+        if cliente and cliente.lower() not in (item.get("cliente_nome") or "").lower():
+            continue
+        out.append(item)
+    return out
+
+@app.get("/cobranca-historico/export/excel")
+async def exportar_historico_excel(data_inicio: str = None, data_fim: str = None, cliente: str = None):
+    from openpyxl import Workbook
+    historico = _filtrar_historico(data_inicio, data_fim, cliente)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Historico Cobrancas"
+    headers = ["Data", "Cliente", "Telefone", "Status", "Titulo", "Parcela", "Vencimento", "Valor", "Tipo Envio", "Mensagem"]
+    ws.append(headers)
+    for it in historico:
+        ws.append([
+            it.get("created_at", ""),
+            it.get("cliente_nome", ""),
+            it.get("cliente_telefone", ""),
+            it.get("status", ""),
+            it.get("titulo_id", ""),
+            it.get("parcela_id", ""),
+            it.get("vencimento", ""),
+            it.get("valor", ""),
+            it.get("tipo_envio", ""),
+            (it.get("mensagem_enviada") or "")[:500],
+        ])
+    for col_idx, _ in enumerate(headers, 1):
+        ws.column_dimensions[chr(64+col_idx)].width = 20
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=historico_cobrancas.xlsx"},
+    )
+
+@app.get("/cobranca-historico/export/pdf")
+async def exportar_historico_pdf(data_inicio: str = None, data_fim: str = None, cliente: str = None):
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib import colors
+    historico = _filtrar_historico(data_inicio, data_fim, cliente)
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), leftMargin=20, rightMargin=20, topMargin=20, bottomMargin=20)
+    styles = getSampleStyleSheet()
+    story = [Paragraph("Relatório de Cobranças", styles["Title"])]
+    filtros = []
+    if data_inicio: filtros.append(f"De: {data_inicio}")
+    if data_fim: filtros.append(f"Até: {data_fim}")
+    if cliente: filtros.append(f"Cliente: {cliente}")
+    if filtros:
+        story.append(Paragraph(" | ".join(filtros), styles["Normal"]))
+    story.append(Paragraph(f"Total de registros: {len(historico)}", styles["Normal"]))
+    story.append(Spacer(1, 12))
+    data = [["Data", "Cliente", "Telefone", "Status", "Vencimento", "Valor"]]
+    for it in historico:
+        valor = it.get("valor")
+        valor_str = f"R$ {float(valor):.2f}" if valor else ""
+        data.append([
+            (it.get("created_at") or "")[:16],
+            (it.get("cliente_nome") or "")[:30],
+            it.get("cliente_telefone") or "",
+            it.get("status") or "",
+            (it.get("vencimento") or "")[:10],
+            valor_str,
+        ])
+    t = Table(data, repeatRows=1)
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#334155")),
+        ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+        ("FONTSIZE", (0,0), (-1,-1), 8),
+        ("GRID", (0,0), (-1,-1), 0.25, colors.grey),
+        ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, colors.HexColor("#f1f5f9")]),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+    ]))
+    story.append(t)
+    doc.build(story)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=historico_cobrancas.pdf"},
+    )
 
 @app.post("/testar-cobranca")
 async def testar_cobranca():
