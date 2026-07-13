@@ -1422,16 +1422,16 @@ async def testar_cobranca():
 
 @app.post("/limpar-cache")
 async def limpar_cache():
-    """Endpoint para limpar cache de generatedTicket"""
+    """Endpoint para limpar todo o cache"""
     try:
         from pathlib import Path
         cache_dir = Path(__file__).parent / "cache"
         if cache_dir.exists():
-            # Remover apenas arquivos de generated_ticket
-            for file in cache_dir.glob("generated_ticket_*.json"):
+            # Remover todos os arquivos de cache
+            for file in cache_dir.glob("*.json"):
                 file.unlink()
                 logging.warning(f"🗑️ Cache removido: {file.name}")
-            return {"success": True, "message": "Cache de generatedTicket limpo"}
+            return {"success": True, "message": "Cache limpo completamente"}
         else:
             return {"success": False, "message": "Diretório de cache não existe"}
     except Exception as e:

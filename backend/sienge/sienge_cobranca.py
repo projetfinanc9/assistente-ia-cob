@@ -164,48 +164,33 @@ def listar_parcelas(titulo_id: int, usar_cache: bool = True):
     return results
 
 
-def verificar_generated_ticket(titulo_id: int, installment_id: int) -> bool:
+def tem_boleto_apto(titulo_id: int, installment_id: int) -> tuple[bool, str | None]:
     """
-    Verifica se uma parcela tem boleto gerado usando o campo generatedTicket.
-    Usa cache para economizar requisições.
+    Verifica se a parcela é apta pra segunda via chamando a API diretamente.
+    Retorna (apta, urlReport).
     """
-    cache_key = f"generated_ticket_{titulo_id}"
+    url = f"{BASE_URL}/payment-slip-notification"
+    params = {"billReceivableId": titulo_id, "installmentId": installment_id}
     
-    # Tentar obter do cache (cache de 6h para generatedTicket)
-    dados_cache = obter_dados_cache(cache_key, validade_horas=6)
-    if dados_cache is not None:
-        # Cache é um dict com installment_id -> generatedTicket
-        result = dados_cache.get(str(installment_id), False)
-        logging.warning(f"📦 Cache hit para generated_ticket_{titulo_id}: installment {installment_id} = {result}")
-        return result
+    r = requests.get(url, headers=json_headers, params=params, timeout=30)
     
-    # Buscar da API
-    logging.warning(f"🔍 Buscando generatedTicket para título {titulo_id}")
-    url = f"{BASE_URL}/accounts-receivable/receivable-bills/{titulo_id}/installments"
-    r = requests.get(url, headers=json_headers, timeout=30)
-    if r.status_code != 200:
-        logging.warning(f"⚠️ Erro ao buscar installments do título {titulo_id}: {r.status_code}")
-        return False
+    if r.status_code == 200:
+        results = r.json().get("results", [])
+        if results:
+            url_report = results[0].get("urlReport")
+            logging.warning(f"✅ Parcela {installment_id} apta: urlReport={url_report}")
+            return True, url_report
+        return False, None
     
-    results = r.json().get("results") or []
-    logging.warning(f"📊 {len(results)} parcelas encontradas para título {titulo_id}")
+    if r.status_code == 422:
+        # Parcela não apta: sem cobrança, nosso número zerado ou saldo zerado
+        error_msg = r.json().get('clientMessage', 'Erro desconhecido')
+        logging.warning(f"⏭️ Parcela {installment_id} não apta: {error_msg}")
+        return False, None
     
-    # Criar dict de installment_id -> generatedTicket
-    generated_tickets = {}
-    for parcela in results:
-        inst_id = parcela.get("installmentId")
-        if inst_id:
-            generated = parcela.get("generatedTicket", False)
-            generated_tickets[str(inst_id)] = generated
-            logging.warning(f"📋 Parcela {inst_id}: generatedTicket={generated}, vencimento={parcela.get('dueDate')}")
-    
-    # Salvar no cache
-    salvar_cache(cache_key, generated_tickets)
-    logging.warning(f"💾 Generated tickets do título {titulo_id} cacheados")
-    
-    result = generated_tickets.get(str(installment_id), False)
-    logging.warning(f"✅ Resultado para installment {installment_id}: {result}")
-    return result
+    # outros erros (401, 500, etc) — loga separado pra não confundir com "não apta"
+    logging.warning(f"⚠️ Erro inesperado ({r.status_code}) ao checar parcela {installment_id} do título {titulo_id}")
+    return False, None
 
 
 def listar_parcelas_por_periodo_bulk(data_inicio: str, data_fim: str) -> List[Dict]:
@@ -287,30 +272,23 @@ def gerar_link_boleto(titulo_id: int, parcela_id: int) -> str:
 def baixar_pdf_boleto(titulo_id: int, parcela_id: int) -> bytes:
     """
     Baixa o PDF do boleto da API Sienge.
+    Verifica se a parcela é apta antes de baixar.
     Retorna o conteúdo do PDF em bytes ou None se houver erro.
     """
-    url = f"{BASE_URL}/payment-slip-notification"
-    params = {"billReceivableId": titulo_id, "installmentId": parcela_id}
+    # Primeiro verifica se a parcela é apta
+    apta, pdf_url = tem_boleto_apto(titulo_id, parcela_id)
+    
+    if not apta or not pdf_url:
+        return None
     
     try:
-        r = requests.get(url, headers=json_headers, params=params, timeout=30)
-        if r.status_code == 200:
-            data = r.json()
-            results = data.get("results") or []
-            if results and isinstance(results, list):
-                result = results[0]
-                pdf_url = result.get("urlReport")
-                
-                if pdf_url:
-                    logging.warning(f"📥 Baixando PDF do boleto {titulo_id}/{parcela_id}")
-                    pdf_response = requests.get(pdf_url, timeout=30)
-                    if pdf_response.status_code == 200:
-                        logging.warning(f"✅ PDF baixado com sucesso ({len(pdf_response.content)} bytes)")
-                        return pdf_response.content
-                    else:
-                        logging.warning(f"⚠️ Erro ao baixar PDF: {pdf_response.status_code}")
+        logging.warning(f"📥 Baixando PDF do boleto {titulo_id}/{parcela_id}")
+        pdf_response = requests.get(pdf_url, timeout=30)
+        if pdf_response.status_code == 200:
+            logging.warning(f"✅ PDF baixado com sucesso ({len(pdf_response.content)} bytes)")
+            return pdf_response.content
         else:
-            logging.warning(f"⚠️ Erro ao buscar boleto: {r.status_code}")
+            logging.warning(f"⚠️ Erro ao baixar PDF: {pdf_response.status_code}")
     except Exception as e:
         logging.error(f"❌ Erro ao baixar PDF do boleto: {e}")
     
@@ -404,12 +382,6 @@ def verificar_boletos_vencendo() -> List[Dict]:
         installment_id = parcela.get("installmentId")
         if not installment_id:
             logging.warning(f"⏭️ Título sem parcela gerada (sem installmentId), ignorando")
-            continue
-        
-        # Verificar se parcela tem boleto gerado usando generatedTicket (garante 100% que tem nosso número)
-        titulo_id = parcela.get("billId")
-        if not verificar_generated_ticket(titulo_id, installment_id):
-            logging.warning(f"⏭️ Parcela {installment_id} sem boleto gerado (generatedTicket=false), ignorando")
             continue
         
         try:
