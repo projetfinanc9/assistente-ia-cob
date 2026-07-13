@@ -4,7 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Trash2, Save, Loader2 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Plus, Trash2, Save, Loader2, Eye } from "lucide-react";
 
 interface Lembrete {
   dias_antes: number;
@@ -38,6 +39,7 @@ const CobrancaConfig = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
 
   useEffect(() => {
     loadConfig();
@@ -115,6 +117,14 @@ const CobrancaConfig = () => {
     const newLembretes = [...config.lembretes];
     newLembretes[index] = { ...newLembretes[index], [field]: value };
     setConfig({ ...config, lembretes: newLembretes });
+  };
+
+  const previewMessage = (mensagem: string) => {
+    return mensagem
+      .replace(/{cliente}/g, "João Silva")
+      .replace(/{dias}/g, "5")
+      .replace(/{valor}/g, "R$ 1.234,56")
+      .replace(/{vencimento}/g, "15/07/2026");
   };
 
   if (loading) {
@@ -204,11 +214,29 @@ const CobrancaConfig = () => {
 
               <div className="space-y-2">
                 <Label>Mensagem do lembrete</Label>
-                <Input
+                <Textarea
                   value={lembrete.mensagem}
                   onChange={(e) => updateLembrete(index, 'mensagem', e.target.value)}
-                  placeholder="Use {cliente}, {dias}, {valor} como variáveis"
+                  placeholder="Use {cliente}, {dias}, {valor}, {vencimento} como variáveis"
+                  rows={4}
+                  className="resize-none"
                 />
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPreviewIndex(previewIndex === index ? null : index)}
+                  >
+                    <Eye className="w-4 h-4 mr-2" />
+                    {previewIndex === index ? "Ocultar pré-visualização" : "Pré-visualizar"}
+                  </Button>
+                </div>
+                {previewIndex === index && (
+                  <div className="bg-muted p-3 rounded-md text-sm">
+                    <p className="font-medium mb-1">Pré-visualização:</p>
+                    <p className="whitespace-pre-wrap">{previewMessage(lembrete.mensagem)}</p>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-between">
