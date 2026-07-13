@@ -5,12 +5,15 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, Save, Loader2, Eye } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Plus, Trash2, Save, Loader2, Eye, Edit, X } from "lucide-react";
 
 interface Lembrete {
   dias_antes: number;
   mensagem: string;
   enviar_segunda_via: boolean;
+  envio_pdf: boolean;
+  envio_link: boolean;
 }
 
 interface ConfigCobranca {
@@ -28,11 +31,15 @@ const CobrancaConfig = () => {
         dias_antes: 5,
         mensagem: "Olá {cliente}, seu boleto vence em {dias} dias. Valor: R$ {valor}",
         enviar_segunda_via: true,
+        envio_pdf: true,
+        envio_link: false,
       },
       {
         dias_antes: 1,
         mensagem: "Olá {cliente}, seu boleto vence amanhã! Valor: R$ {valor}",
         enviar_segunda_via: true,
+        envio_pdf: true,
+        envio_link: false,
       },
     ],
   });
@@ -40,6 +47,8 @@ const CobrancaConfig = () => {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editingLembrete, setEditingLembrete] = useState<Lembrete | null>(null);
 
   useEffect(() => {
     loadConfig();
@@ -101,6 +110,8 @@ const CobrancaConfig = () => {
           dias_antes: 3,
           mensagem: "Lembrete padrão",
           enviar_segunda_via: true,
+          envio_pdf: true,
+          envio_link: false,
         },
       ],
     });
@@ -125,6 +136,25 @@ const CobrancaConfig = () => {
       .replace(/{dias}/g, "5")
       .replace(/{valor}/g, "R$ 1.234,56")
       .replace(/{vencimento}/g, "15/07/2026");
+  };
+
+  const openEditModal = (index: number) => {
+    setEditingIndex(index);
+    setEditingLembrete({ ...config.lembretes[index] });
+  };
+
+  const closeEditModal = () => {
+    setEditingIndex(null);
+    setEditingLembrete(null);
+  };
+
+  const saveEditedLembrete = () => {
+    if (editingIndex !== null && editingLembrete) {
+      const newLembretes = [...config.lembretes];
+      newLembretes[editingIndex] = editingLembrete;
+      setConfig({ ...config, lembretes: newLembretes });
+      closeEditModal();
+    }
   };
 
   if (loading) {
@@ -187,9 +217,32 @@ const CobrancaConfig = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           {config.lembretes.map((lembrete, index) => (
-            <div key={index} className="border rounded-lg p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold">Lembrete #{index + 1}</h3>
+            <div key={index} className="flex items-center justify-between border rounded-lg p-4 hover:bg-muted/50">
+              <div className="flex-1">
+                <div className="flex items-center gap-4">
+                  <span className="font-semibold">Lembrete #{index + 1}</span>
+                  <Badge variant="outline">
+                    {lembrete.dias_antes > 0 ? `+${lembrete.dias_antes} dias após` : 
+                     lembrete.dias_antes < 0 ? `${lembrete.dias_antes} dias antes` : 
+                     'Dia do vencimento'}
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1 truncate max-w-md">
+                  {lembrete.mensagem}
+                </p>
+                <div className="flex items-center gap-2 mt-2">
+                  {lembrete.envio_pdf && <Badge variant="secondary">PDF</Badge>}
+                  {lembrete.envio_link && <Badge variant="secondary">Link</Badge>}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => openEditModal(index)}
+                >
+                  <Edit className="w-4 h-4" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -197,54 +250,6 @@ const CobrancaConfig = () => {
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Dias em relação ao vencimento</Label>
-                <Input
-                  type="text"
-                  value={lembrete.dias_antes}
-                  onChange={(e) => updateLembrete(index, 'dias_antes', parseInt(e.target.value) || 0)}
-                  placeholder="Ex: -5, 0, 5"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Negativo = antes (ex: -5), 0 = dia do vencimento, Positivo = depois (ex: 5)
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Mensagem do lembrete</Label>
-                <Textarea
-                  value={lembrete.mensagem}
-                  onChange={(e) => updateLembrete(index, 'mensagem', e.target.value)}
-                  placeholder="Use {cliente}, {dias}, {valor}, {vencimento} como variáveis"
-                  rows={4}
-                  className="resize-none"
-                />
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPreviewIndex(previewIndex === index ? null : index)}
-                  >
-                    <Eye className="w-4 h-4 mr-2" />
-                    {previewIndex === index ? "Ocultar pré-visualização" : "Pré-visualizar"}
-                  </Button>
-                </div>
-                {previewIndex === index && (
-                  <div className="bg-muted p-3 rounded-md text-sm">
-                    <p className="font-medium mb-1">Pré-visualização:</p>
-                    <p className="whitespace-pre-wrap">{previewMessage(lembrete.mensagem)}</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between">
-                <Label>Enviar segunda via do boleto</Label>
-                <Switch
-                  checked={lembrete.enviar_segunda_via}
-                  onCheckedChange={(checked) => updateLembrete(index, 'enviar_segunda_via', checked)}
-                />
               </div>
             </div>
           ))}
@@ -293,6 +298,114 @@ const CobrancaConfig = () => {
           <p><code>{"{vencimento}"}</code> - Data de vencimento</p>
         </CardContent>
       </Card>
+
+      {/* Modal de Edição de Lembrete */}
+      {editingLembrete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Editar Lembrete #{editingIndex! + 1}</CardTitle>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={closeEditModal}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Dias em relação ao vencimento</Label>
+                <Input
+                  type="number"
+                  value={editingLembrete.dias_antes}
+                  onChange={(e) => setEditingLembrete({ ...editingLembrete, dias_antes: parseInt(e.target.value) || 0 })}
+                  placeholder="Ex: -5, 0, 5"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Negativo = antes (ex: -5), 0 = dia do vencimento, Positivo = depois (ex: 5)
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Mensagem do lembrete</Label>
+                <Textarea
+                  value={editingLembrete.mensagem}
+                  onChange={(e) => setEditingLembrete({ ...editingLembrete, mensagem: e.target.value })}
+                  placeholder="Use {cliente}, {dias}, {valor}, {vencimento} como variáveis"
+                  rows={4}
+                  className="resize-none"
+                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPreviewIndex(previewIndex === editingIndex ? null : editingIndex)}
+                  >
+                    <Eye className="w-4 h-4 mr-2" />
+                    {previewIndex === editingIndex ? "Ocultar pré-visualização" : "Pré-visualizar"}
+                  </Button>
+                </div>
+                {previewIndex === editingIndex && (
+                  <div className="bg-muted p-3 rounded-md text-sm">
+                    <p className="font-medium mb-1">Pré-visualização:</p>
+                    <p className="whitespace-pre-wrap">{previewMessage(editingLembrete.mensagem)}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <Label>Opções de Envio</Label>
+                
+                <div className="flex items-center justify-between border rounded-lg p-4">
+                  <div>
+                    <p className="font-medium">Enviar PDF do boleto</p>
+                    <p className="text-sm text-muted-foreground">Anexar arquivo PDF do boleto na mensagem</p>
+                  </div>
+                  <Switch
+                    checked={editingLembrete.envio_pdf}
+                    onCheckedChange={(checked) => setEditingLembrete({ ...editingLembrete, envio_pdf: checked })}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between border rounded-lg p-4">
+                  <div>
+                    <p className="font-medium">Enviar link do boleto</p>
+                    <p className="text-sm text-muted-foreground">Incluir link para pagamento online</p>
+                  </div>
+                  <Switch
+                    checked={editingLembrete.envio_link}
+                    onCheckedChange={(checked) => setEditingLembrete({ ...editingLembrete, envio_link: checked })}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between border rounded-lg p-4">
+                  <div>
+                    <p className="font-medium">Enviar segunda via (legado)</p>
+                    <p className="text-sm text-muted-foreground">Opção original de envio de boleto</p>
+                  </div>
+                  <Switch
+                    checked={editingLembrete.enviar_segunda_via}
+                    onCheckedChange={(checked) => setEditingLembrete({ ...editingLembrete, enviar_segunda_via: checked })}
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button onClick={saveEditedLembrete} className="flex-1">
+                  <Save className="w-4 h-4 mr-2" />
+                  Salvar Alterações
+                </Button>
+                <Button onClick={closeEditModal} variant="outline" className="flex-1">
+                  Cancelar
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };

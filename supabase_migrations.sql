@@ -41,9 +41,29 @@ CREATE TABLE IF NOT EXISTS lembretes_cobranca (
     dias_antes INTEGER NOT NULL,
     mensagem TEXT NOT NULL,
     enviar_segunda_via BOOLEAN NOT NULL DEFAULT true,
+    envio_pdf BOOLEAN NOT NULL DEFAULT false,
+    envio_link BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Adicionar colunas envio_pdf e envio_link se a tabela já existir
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'lembretes_cobranca' AND column_name = 'envio_pdf'
+    ) THEN
+        ALTER TABLE lembretes_cobranca ADD COLUMN envio_pdf BOOLEAN NOT NULL DEFAULT false;
+    END IF;
+    
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'lembretes_cobranca' AND column_name = 'envio_link'
+    ) THEN
+        ALTER TABLE lembretes_cobranca ADD COLUMN envio_link BOOLEAN NOT NULL DEFAULT false;
+    END IF;
+END $$;
 
 -- ============================================================
 -- TABELA: historico_cobrancas

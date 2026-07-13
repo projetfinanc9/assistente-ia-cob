@@ -127,7 +127,9 @@ def buscar_configuracao_cobranca():
                 lembretes.append({
                     "dias_antes": lembrete["dias_antes"],
                     "mensagem": lembrete["mensagem"],
-                    "enviar_segunda_via": lembrete["enviar_segunda_via"]
+                    "enviar_segunda_via": lembrete["enviar_segunda_via"],
+                    "envio_pdf": lembrete.get("envio_pdf", False),
+                    "envio_link": lembrete.get("envio_link", False)
                 })
         
         config["lembretes"] = lembretes
@@ -170,7 +172,9 @@ def salvar_configuracao_cobranca(dados_config: dict):
                     "configuracao_id": configuracao_id,
                     "dias_antes": lembrete["dias_antes"],
                     "mensagem": lembrete["mensagem"],
-                    "enviar_segunda_via": lembrete["enviar_segunda_via"]
+                    "enviar_segunda_via": lembrete["enviar_segunda_via"],
+                    "envio_pdf": lembrete.get("envio_pdf", False),
+                    "envio_link": lembrete.get("envio_link", False)
                 }).execute()
             
             print(f"✅ Configuração atualizada com {len(lembretes)} lembretes")
@@ -189,7 +193,9 @@ def salvar_configuracao_cobranca(dados_config: dict):
                         "configuracao_id": configuracao_id,
                         "dias_antes": lembrete["dias_antes"],
                         "mensagem": lembrete["mensagem"],
-                        "enviar_segunda_via": lembrete["enviar_segunda_via"]
+                        "enviar_segunda_via": lembrete["enviar_segunda_via"],
+                        "envio_pdf": lembrete.get("envio_pdf", False),
+                        "envio_link": lembrete.get("envio_link", False)
                     }).execute()
                 
                 print(f"✅ Configuração criada com {len(lembretes)} lembretes")
