@@ -1266,7 +1266,8 @@ def save_cobranca_config(config: ConfiguracaoCobranca):
                 {
                     "dias_antes": l.dias_antes,
                     "mensagem": l.mensagem,
-                    "enviar_segunda_via": l.enviar_segunda_via
+                    "enviar_segunda_via": l.enviar_segunda_via,
+                    "envio_pdf": l.envio_pdf
                 }
                 for l in config.lembretes
             ]
