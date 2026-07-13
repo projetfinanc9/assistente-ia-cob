@@ -60,15 +60,22 @@ def atualizar_agendamento(horario: str):
     # Parse horário (formato HH:MM)
     try:
         hora, minuto = map(int, horario.split(":"))
-        logging.warning(f"⏰ Configurando agendamento para {hora}:{minuto}")
+        logging.warning(f"⏰ Configurando agendamento para {hora}:{minuto} (timezone: {brasilia_tz})")
         
         # Adicionar novo job
         scheduler.add_job(
             executar_cobranca_agendada,
-            CronTrigger(hour=hora, minute=minuto),
+            CronTrigger(hour=hora, minute=minuto, timezone=brasilia_tz),
             id="cobranca_agendada",
             replace_existing=True
         )
+        
+        # Listar jobs agendados
+        jobs = scheduler.get_jobs()
+        logging.warning(f"📋 Jobs agendados: {[job.id for job in jobs]}")
+        if jobs:
+            for job in jobs:
+                logging.warning(f"📋 Job {job.id}: próxima execução em {job.next_run_time}")
         
         # Iniciar scheduler se não estiver rodando
         if not scheduler.running:
@@ -77,7 +84,7 @@ def atualizar_agendamento(horario: str):
         else:
             logging.warning("✅ Agendamento atualizado")
     except Exception as e:
-        logging.error(f"❌ Erro ao configurar agendamento: {e}")
+        logging.error(f"❌ Erro ao configurar agendamento: {e}", exc_info=True)
 
 def remover_agendamento():
     """Remove o agendamento de cobrança"""
@@ -143,8 +150,7 @@ async def job_cobranca():
     except Exception as e:
         logging.error(f"❌ Erro no job de cobrança: {e}")
 
-# Configurar job (executar diariamente às 9h)
-scheduler.add_job(job_cobranca, CronTrigger(hour=9, minute=0))
+# Job hardcoded removido - usar apenas agendamento dinâmico via configuracao
 
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -157,6 +163,12 @@ async def startup_event():
     """Inicia o scheduler quando o servidor sobe"""
     scheduler.start()
     logging.info("⏰ Scheduler iniciado - Jobs de cobrança automática ativos")
+    logging.warning(f"📋 Timezone do scheduler: {scheduler.timezone}")
+    jobs = scheduler.get_jobs()
+    logging.warning(f"📋 Jobs ativos no startup: {[job.id for job in jobs]}")
+    if jobs:
+        for job in jobs:
+            logging.warning(f"📋 Job {job.id}: próxima execução em {job.next_run_time}")
 
 # ============================================================
 # 🔐 CONFIG TWILIO (WHATSAPP)
