@@ -414,8 +414,7 @@ def verificar_boletos_vencendo() -> List[Dict]:
                     "dias_antes": dias_antes,
                     "mensagem_template": lembrete.get("mensagem"),
                     "enviar_segunda_via": lembrete.get("enviar_segunda_via", False),
-                    "envio_pdf": lembrete.get("envio_pdf", False),
-                    "envio_link": lembrete.get("envio_link", False)
+                    "envio_pdf": lembrete.get("envio_pdf", False)
                 })
                 logging.warning(f"✅ Boleto encontrado: {cliente_nome} - Vence em {dias_antes} dias")
     
@@ -446,14 +445,8 @@ def gerar_mensagem_cobranca(boleto: Dict) -> str:
     mensagem = mensagem.replace("{dias}", str(dias))
     mensagem = mensagem.replace("{vencimento}", vencimento)
     
-    # Adicionar link do boleto se configurado
-    if boleto.get("envio_link"):
-        link_boleto = gerar_link_boleto(boleto["titulo_id"], boleto["parcela_id"])
-        if link_boleto and not link_boleto.startswith("❌"):
-            mensagem += f"\n\n{link_boleto}"
-    
     # Manter compatibilidade com enviar_segunda_via (legado)
-    if boleto.get("enviar_segunda_via") and not boleto.get("envio_link"):
+    if boleto.get("enviar_segunda_via"):
         link_boleto = gerar_link_boleto(boleto["titulo_id"], boleto["parcela_id"])
         if link_boleto and not link_boleto.startswith("❌"):
             mensagem += f"\n\n{link_boleto}"

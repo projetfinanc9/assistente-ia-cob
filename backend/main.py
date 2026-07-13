@@ -201,7 +201,6 @@ class LembreteCobranca(BaseModel):
     mensagem: str
     enviar_segunda_via: bool
     envio_pdf: bool = False
-    envio_link: bool = False
 
 class ConfiguracaoCobranca(BaseModel):
     ativo: bool

@@ -13,7 +13,6 @@ interface Lembrete {
   mensagem: string;
   enviar_segunda_via: boolean;
   envio_pdf: boolean;
-  envio_link: boolean;
 }
 
 interface ConfigCobranca {
@@ -32,14 +31,12 @@ const CobrancaConfig = () => {
         mensagem: "Olá {cliente}, seu boleto vence em {dias} dias. Valor: R$ {valor}",
         enviar_segunda_via: true,
         envio_pdf: true,
-        envio_link: false,
       },
       {
         dias_antes: 1,
         mensagem: "Olá {cliente}, seu boleto vence amanhã! Valor: R$ {valor}",
         enviar_segunda_via: true,
         envio_pdf: true,
-        envio_link: false,
       },
     ],
   });
@@ -67,7 +64,6 @@ const CobrancaConfig = () => {
         const lembretesComCampos = data.lembretes.map((lembrete: any) => ({
           ...lembrete,
           envio_pdf: lembrete.envio_pdf ?? false,
-          envio_link: lembrete.envio_link ?? false,
         }));
         data.lembretes = lembretesComCampos;
         console.log('📋 Lembretes com campos novos:', lembretesComCampos);
@@ -123,7 +119,6 @@ const CobrancaConfig = () => {
           mensagem: "Lembrete padrão",
           enviar_segunda_via: true,
           envio_pdf: true,
-          envio_link: false,
         },
       ],
     });
@@ -244,7 +239,6 @@ const CobrancaConfig = () => {
                 </p>
                 <div className="flex items-center gap-2 mt-2">
                   {lembrete.envio_pdf && <Badge variant="secondary">PDF</Badge>}
-                  {lembrete.envio_link && <Badge variant="secondary">Link</Badge>}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -379,17 +373,6 @@ const CobrancaConfig = () => {
                   <Switch
                     checked={editingLembrete.envio_pdf}
                     onCheckedChange={(checked) => setEditingLembrete({ ...editingLembrete, envio_pdf: checked })}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between border rounded-lg p-4">
-                  <div>
-                    <p className="font-medium">Enviar link do boleto</p>
-                    <p className="text-sm text-muted-foreground">Incluir link para pagamento online</p>
-                  </div>
-                  <Switch
-                    checked={editingLembrete.envio_link}
-                    onCheckedChange={(checked) => setEditingLembrete({ ...editingLembrete, envio_link: checked })}
                   />
                 </div>
 
