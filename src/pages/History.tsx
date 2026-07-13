@@ -10,7 +10,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Loader2, X } from "lucide-react";
 import { Search, Loader2, X, FileText, FileSpreadsheet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Label } from "@/components/ui/label";
