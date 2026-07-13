@@ -11,11 +11,13 @@ import pandas as pd
 import requests  # <-- para chamar a API do WhatsApp Cloud
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from pytz import timezone
 
 # ============================================================
 # ⏰ SISTEMA DE AGENDAMENTO
-# ============================================================
-scheduler = AsyncIOScheduler()
+# =================================================<arg_value># Configurar scheduler com timezone de Brasília
+brasilia_tz = timezone('America/Sao_Paulo')
+scheduler = AsyncIOScheduler(timezone=brasilia_tz)
 
 # ============================================================
 # 🔄 DEDUPLICAÇÃO DE MENSAGENS WHATSAPP
