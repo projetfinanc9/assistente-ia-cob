@@ -3,7 +3,6 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
 import Settings from "./pages/Settings";
 import CobrancaConfig from "./pages/CobrancaConfig";
 import Dashboard from "./pages/Dashboard";
@@ -20,8 +19,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/dashboard" element={<DashboardLayout />}>
+          <Route path="/" element={<DashboardLayout />}>
             <Route index element={<Dashboard />} />
             <Route path="history" element={<History />} />
             <Route path="cobranca-config" element={<CobrancaConfig />} />
