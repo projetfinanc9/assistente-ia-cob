@@ -1255,6 +1255,17 @@ def salvar_configuracao_cobranca(config: dict):
         logging.error(f"❌ Erro ao salvar configuração de cobrança: {e}")
         return False
 
+@app.post("/testar-cobranca")
+async def testar_cobranca():
+    """Endpoint para testar manualmente o job de cobrança"""
+    try:
+        logging.warning("🧪 Iniciando teste manual de cobrança...")
+        await executar_cobranca_agendada()
+        return {"success": True, "message": "Teste de cobrança executado"}
+    except Exception as e:
+        logging.error(f"❌ Erro no teste de cobrança: {e}")
+        return {"success": False, "error": str(e)}
+
 @app.post("/cobranca-config")
 def save_cobranca_config(config: ConfiguracaoCobranca):
     """Salva novas configurações de cobrança automática no Supabase"""
