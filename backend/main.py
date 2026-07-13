@@ -84,22 +84,39 @@ async def executar_cobranca_agendada():
                 numero = re.sub(r"\D", "", boleto["cliente_telefone"])
                 
                 # Validar número de telefone
-                if len(numero) < 10 or len(numero) > 11:
-                    erro_msg = f"Número de telefone inválido: {numero}"
-                    logging.warning(f"⚠️ {erro_msg}: {boleto.get('cliente_nome')}")
-                    if historico_id:
-                        try:
-                            atualizar_historico_cobranca(historico_id, {
-                                "status": "erro",
-                                "erro_mensagem": erro_msg
-                            })
-                            logging.warning(f"✅ Status atualizado para erro")
-                        except Exception as e:
-                            logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
-                    continue
-                
-                # Adicionar código do país 55 se for número brasileiro (10 ou 11 dígitos)
-                if len(numero) == 11 or len(numero) == 10:
+                # Se já tem código do país (55), deve ter 12 ou 13 dígitos
+                # Se não tem código do país, deve ter 10 ou 11 dígitos
+                if numero.startswith("55"):
+                    # Já tem código do país
+                    if len(numero) < 12 or len(numero) > 13:
+                        erro_msg = f"Número de telefone inválido (com código do país): {numero}"
+                        logging.warning(f"⚠️ {erro_msg}: {boleto.get('cliente_nome')}")
+                        if historico_id:
+                            try:
+                                atualizar_historico_cobranca(historico_id, {
+                                    "status": "erro",
+                                    "erro_mensagem": erro_msg
+                                })
+                                logging.warning(f"✅ Status atualizado para erro")
+                            except Exception as e:
+                                logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
+                        continue
+                else:
+                    # Não tem código do país
+                    if len(numero) < 10 or len(numero) > 11:
+                        erro_msg = f"Número de telefone inválido (sem código do país): {numero}"
+                        logging.warning(f"⚠️ {erro_msg}: {boleto.get('cliente_nome')}")
+                        if historico_id:
+                            try:
+                                atualizar_historico_cobranca(historico_id, {
+                                    "status": "erro",
+                                    "erro_mensagem": erro_msg
+                                })
+                                logging.warning(f"✅ Status atualizado para erro")
+                            except Exception as e:
+                                logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
+                        continue
+                    # Adicionar código do país 55
                     numero = "55" + numero
                 
                 if numero.startswith("55"):
