@@ -1661,13 +1661,110 @@ async def gerar_relatorio_pdf(
         logging.error(f"❌ Erro ao gerar relatório PDF: {e}")
         return {"error": str(e)}
 
-@app.get("/cobranca-relatorio-excel")
-async def gerar_relatorio_excel(
+@app.get("/cobranca-historico/export/pdf")
+async def exportar_historico_pdf(
     data_inicio: str = None,
     data_fim: str = None,
     cliente: str = None
 ):
-    """Endpoint para gerar relatório Excel do histórico de cobranças"""
+    """Endpoint para exportar histórico de cobranças em PDF"""
+    try:
+        from supabase_client import buscar_historico_cobrancas
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib import colors
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib.units import inch
+        from io import BytesIO
+        
+        # Buscar histórico com filtros
+        historico = buscar_historico_cobrancas()
+        
+        # Aplicar filtros
+        if data_inicio or data_fim or cliente:
+            historico_filtrado = []
+            for item in historico:
+                if data_inicio:
+                    item_data = item.get("created_at", "")
+                    if item_data < data_inicio:
+                        continue
+                if data_fim:
+                    item_data = item.get("created_at", "")
+                    if item_data > data_fim:
+                        continue
+                if cliente:
+                    item_cliente = item.get("cliente_nome", "").lower()
+                    if cliente.lower() not in item_cliente:
+                        continue
+                historico_filtrado.append(item)
+            historico = historico_filtrado
+        
+        # Criar PDF
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter)
+        elements = []
+        styles = getSampleStyleSheet()
+        
+        # Título
+        title = Paragraph("Relatório de Cobranças", styles["Title"])
+        elements.append(title)
+        
+        # Subtítulo com período
+        periodo_texto = f"Período: {data_inicio or 'Início'} a {data_fim or 'Fim'}"
+        if cliente:
+            periodo_texto += f" | Cliente: {cliente}"
+        subtitle = Paragraph(periodo_texto, styles["Normal"])
+        elements.append(subtitle)
+        elements.append(Paragraph("<br/><br/>", styles["Normal"]))
+        
+        # Tabela de dados
+        data = [
+            ["Data", "Cliente", "Telefone", "Status", "Valor", "Vencimento"]
+        ]
+        
+        for item in historico:
+            data.append([
+                item.get("created_at", "")[:10],
+                item.get("cliente_nome", ""),
+                item.get("cliente_telefone", ""),
+                item.get("status", ""),
+                str(item.get("valor", 0)),
+                item.get("vencimento", "")
+            ])
+        
+        table = Table(data, colWidths=[1.2*inch, 2*inch, 1.2*inch, 0.8*inch, 0.8*inch, 1*inch])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ]))
+        elements.append(table)
+        
+        doc.build(elements)
+        buffer.seek(0)
+        
+        from fastapi.responses import Response
+        return Response(
+            content=buffer.getvalue(),
+            media_type="application/pdf",
+            headers={"Content-Disposition": "attachment; filename=relatorio_cobrancas.pdf"}
+        )
+    except Exception as e:
+        logging.error(f"❌ Erro ao gerar relatório PDF: {e}")
+        return {"error": str(e)}
+
+@app.get("/cobranca-historico/export/excel")
+async def exportar_historico_excel(
+    data_inicio: str = None,
+    data_fim: str = None,
+    cliente: str = None
+):
+    """Endpoint para exportar histórico de cobranças em Excel"""
     try:
         from supabase_client import buscar_historico_cobrancas
         import pandas as pd
