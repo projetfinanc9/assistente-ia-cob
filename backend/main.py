@@ -1420,6 +1420,24 @@ async def testar_cobranca():
         logging.error(f"❌ Erro no teste de cobrança: {e}")
         return {"success": False, "error": str(e)}
 
+@app.post("/limpar-cache")
+async def limpar_cache():
+    """Endpoint para limpar cache de generatedTicket"""
+    try:
+        from pathlib import Path
+        cache_dir = Path(__file__).parent / "cache"
+        if cache_dir.exists():
+            # Remover apenas arquivos de generated_ticket
+            for file in cache_dir.glob("generated_ticket_*.json"):
+                file.unlink()
+                logging.warning(f"🗑️ Cache removido: {file.name}")
+            return {"success": True, "message": "Cache de generatedTicket limpo"}
+        else:
+            return {"success": False, "message": "Diretório de cache não existe"}
+    except Exception as e:
+        logging.error(f"❌ Erro ao limpar cache: {e}")
+        return {"success": False, "error": str(e)}
+
 @app.post("/cobranca-config")
 def save_cobranca_config(config: ConfiguracaoCobranca):
     """Salva novas configurações de cobrança automática no Supabase"""

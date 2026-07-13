@@ -175,28 +175,37 @@ def verificar_generated_ticket(titulo_id: int, installment_id: int) -> bool:
     dados_cache = obter_dados_cache(cache_key, validade_horas=6)
     if dados_cache is not None:
         # Cache é um dict com installment_id -> generatedTicket
-        return dados_cache.get(str(installment_id), False)
+        result = dados_cache.get(str(installment_id), False)
+        logging.warning(f"📦 Cache hit para generated_ticket_{titulo_id}: installment {installment_id} = {result}")
+        return result
     
     # Buscar da API
+    logging.warning(f"🔍 Buscando generatedTicket para título {titulo_id}")
     url = f"{BASE_URL}/accounts-receivable/receivable-bills/{titulo_id}/installments"
     r = requests.get(url, headers=json_headers, timeout=30)
     if r.status_code != 200:
+        logging.warning(f"⚠️ Erro ao buscar installments do título {titulo_id}: {r.status_code}")
         return False
     
     results = r.json().get("results") or []
+    logging.warning(f"📊 {len(results)} parcelas encontradas para título {titulo_id}")
     
     # Criar dict de installment_id -> generatedTicket
     generated_tickets = {}
     for parcela in results:
         inst_id = parcela.get("installmentId")
         if inst_id:
-            generated_tickets[str(inst_id)] = parcela.get("generatedTicket", False)
+            generated = parcela.get("generatedTicket", False)
+            generated_tickets[str(inst_id)] = generated
+            logging.warning(f"📋 Parcela {inst_id}: generatedTicket={generated}, vencimento={parcela.get('dueDate')}")
     
     # Salvar no cache
     salvar_cache(cache_key, generated_tickets)
     logging.warning(f"💾 Generated tickets do título {titulo_id} cacheados")
     
-    return generated_tickets.get(str(installment_id), False)
+    result = generated_tickets.get(str(installment_id), False)
+    logging.warning(f"✅ Resultado para installment {installment_id}: {result}")
+    return result
 
 
 def listar_parcelas_por_periodo_bulk(data_inicio: str, data_fim: str) -> List[Dict]:
