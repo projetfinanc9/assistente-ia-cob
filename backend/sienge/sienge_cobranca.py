@@ -351,6 +351,10 @@ def verificar_boletos_vencendo() -> List[Dict]:
             logging.warning(f"⏭️ Parcela {parcela.get('installmentId')} já tem baixa, ignorando")
             continue
         
+        # Log detalhado da parcela para debug
+        logging.warning(f"🔍 Parcela {parcela.get('installmentId')} - Campos: {list(parcela.keys())}")
+        logging.warning(f"🔍 Detalhes: ourNumber={parcela.get('ourNumber')}, billId={parcela.get('billId')}, clientId={parcela.get('clientId')}")
+        
         # Extrair dados da parcela
         vencimento_str = parcela.get("dueDate")
         if not vencimento_str:
