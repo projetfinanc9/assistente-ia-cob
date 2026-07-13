@@ -164,6 +164,41 @@ def listar_parcelas(titulo_id: int, usar_cache: bool = True):
     return results
 
 
+def verificar_generated_ticket(titulo_id: int, installment_id: int) -> bool:
+    """
+    Verifica se uma parcela tem boleto gerado usando o campo generatedTicket.
+    Usa cache para economizar requisições.
+    """
+    cache_key = f"generated_ticket_{titulo_id}"
+    
+    # Tentar obter do cache (cache de 6h para generatedTicket)
+    dados_cache = obter_dados_cache(cache_key, validade_horas=6)
+    if dados_cache is not None:
+        # Cache é um dict com installment_id -> generatedTicket
+        return dados_cache.get(str(installment_id), False)
+    
+    # Buscar da API
+    url = f"{BASE_URL}/accounts-receivable/receivable-bills/{titulo_id}/installments"
+    r = requests.get(url, headers=json_headers, timeout=30)
+    if r.status_code != 200:
+        return False
+    
+    results = r.json().get("results") or []
+    
+    # Criar dict de installment_id -> generatedTicket
+    generated_tickets = {}
+    for parcela in results:
+        inst_id = parcela.get("installmentId")
+        if inst_id:
+            generated_tickets[str(inst_id)] = parcela.get("generatedTicket", False)
+    
+    # Salvar no cache
+    salvar_cache(cache_key, generated_tickets)
+    logging.warning(f"💾 Generated tickets do título {titulo_id} cacheados")
+    
+    return generated_tickets.get(str(installment_id), False)
+
+
 def listar_parcelas_por_periodo_bulk(data_inicio: str, data_fim: str) -> List[Dict]:
     """
     Usa API Bulk-data para buscar parcelas por período de vencimento.
@@ -362,10 +397,10 @@ def verificar_boletos_vencendo() -> List[Dict]:
             logging.warning(f"⏭️ Título sem parcela gerada (sem installmentId), ignorando")
             continue
         
-        # Verificar se parcela tem identificação de documento (indica boleto gerado)
-        document_identification_id = parcela.get("documentIdentificationId")
-        if not document_identification_id:
-            logging.warning(f"⏭️ Parcela {installment_id} sem documentIdentificationId (sem boleto gerado), ignorando")
+        # Verificar se parcela tem boleto gerado usando generatedTicket (garante 100% que tem nosso número)
+        titulo_id = parcela.get("billId")
+        if not verificar_generated_ticket(titulo_id, installment_id):
+            logging.warning(f"⏭️ Parcela {installment_id} sem boleto gerado (generatedTicket=false), ignorando")
             continue
         
         try:
