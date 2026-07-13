@@ -636,6 +636,28 @@ def _filtrar_historico(data_inicio=None, data_fim=None, cliente=None):
         out.append(item)
     return out
 
+@app.get("/logs-mensagens")
+async def buscar_logs_mensagens_endpoint(telefone: str = None, tipo: str = None, data_inicio: str = None, data_fim: str = None):
+    """Endpoint para buscar logs de mensagens"""
+    try:
+        from supabase_client import buscar_logs_mensagens
+        
+        filtros = {}
+        if telefone:
+            filtros["telefone"] = telefone
+        if tipo:
+            filtros["tipo"] = tipo
+        if data_inicio:
+            filtros["data_inicio"] = data_inicio
+        if data_fim:
+            filtros["data_fim"] = data_fim
+        
+        logs = buscar_logs_mensagens(filtros)
+        return {"logs": logs}
+    except Exception as e:
+        logging.error(f"❌ Erro ao buscar logs de mensagens: {e}")
+        return {"logs": []}
+
 @app.get("/cobranca-historico/export/excel")
 async def exportar_historico_excel(data_inicio: str = None, data_fim: str = None, cliente: str = None):
     from openpyxl import Workbook

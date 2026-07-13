@@ -1,4 +1,4 @@
-import { Home, Settings, History, MessageSquare, Bell } from "lucide-react";
+import { Home, Settings, History, MessageSquare, Bell, Inbox } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import {
   Sidebar,
@@ -15,6 +15,7 @@ import {
 const menuItems = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "Histórico", url: "/history", icon: History },
+  { title: "Mensagens", url: "/messages", icon: Inbox },
   { title: "Cobrança", url: "/cobranca-config", icon: Bell },
   { title: "Configurações", url: "/settings", icon: Settings },
 ];

@@ -7,6 +7,7 @@ import Settings from "./pages/Settings";
 import CobrancaConfig from "./pages/CobrancaConfig";
 import Dashboard from "./pages/Dashboard";
 import History from "./pages/History";
+import Messages from "./pages/Messages";
 import NotFound from "./pages/NotFound";
 import DashboardLayout from "./layouts/DashboardLayout";
 
@@ -22,6 +23,7 @@ const App = () => (
           <Route path="/" element={<DashboardLayout />}>
             <Route index element={<Dashboard />} />
             <Route path="history" element={<History />} />
+            <Route path="messages" element={<Messages />} />
             <Route path="cobranca-config" element={<CobrancaConfig />} />
             <Route path="settings" element={<Settings />} />
           </Route>

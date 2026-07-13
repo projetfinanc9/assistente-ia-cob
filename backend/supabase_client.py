@@ -100,6 +100,33 @@ def salvar_log_mensagem(dados_log: dict):
         return None
 
 
+def buscar_logs_mensagens(filtros: dict = None):
+    """
+    Busca logs de mensagens com filtros opcionais
+    """
+    if not supabase:
+        return []
+    
+    try:
+        query = supabase.table("logs_mensagens").select("*")
+        
+        if filtros:
+            if "telefone" in filtros:
+                query = query.eq("telefone", filtros["telefone"])
+            if "tipo" in filtros:
+                query = query.eq("tipo", filtros["tipo"])
+            if "data_inicio" in filtros:
+                query = query.gte("created_at", filtros["data_inicio"])
+            if "data_fim" in filtros:
+                query = query.lte("created_at", filtros["data_fim"])
+        
+        response = query.order("created_at", desc=True).limit(100).execute()
+        return response.data if response.data else []
+    except Exception as e:
+        print(f"❌ Erro ao buscar logs de mensagens: {e}")
+        return []
+
+
 def buscar_configuracao_cobranca():
     """
     Busca configuração de cobrança do banco de dados com lembretes separados
