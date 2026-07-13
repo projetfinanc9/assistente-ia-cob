@@ -447,6 +447,7 @@ async def testar_cobranca():
         resultados = []
         for boleto in boletos:
             if boleto.get("cliente_telefone"):
+                numero = re.sub(r"\D", "", boleto.get("cliente_telefone"))
                 mensagem = gerar_mensagem_cobranca(boleto)
                 
                 # Verificar se cobrança já foi enviada (evitar duplicação via Supabase)
