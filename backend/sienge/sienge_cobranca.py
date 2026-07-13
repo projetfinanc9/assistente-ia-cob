@@ -362,6 +362,12 @@ def verificar_boletos_vencendo() -> List[Dict]:
             logging.warning(f"⏭️ Título sem parcela gerada (sem installmentId), ignorando")
             continue
         
+        # Verificar se parcela tem nosso número (indica boleto gerado)
+        nosso_numero = parcela.get("ourNumber")
+        if not nosso_numero:
+            logging.warning(f"⏭️ Parcela {installment_id} sem nosso número (sem boleto gerado), ignorando")
+            continue
+        
         try:
             vencimento = datetime.strptime(vencimento_str, "%Y-%m-%d")
         except:
