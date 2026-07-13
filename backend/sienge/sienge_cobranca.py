@@ -384,6 +384,11 @@ def verificar_boletos_vencendo() -> List[Dict]:
             logging.warning(f"⏭️ Título sem parcela gerada (sem installmentId), ignorando")
             continue
         
+        # Garantir que vencimento_str seja apenas a data (YYYY-MM-DD)
+        # Se vier com hora, extrair apenas a parte da data
+        if "T" in vencimento_str:
+            vencimento_str = vencimento_str.split("T")[0]
+        
         try:
             vencimento = datetime.strptime(vencimento_str, "%Y-%m-%d")
         except:
