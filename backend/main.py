@@ -793,10 +793,16 @@ def send_whatsapp_cloud_message(to_number: str, body: str, buttons: list = None,
 
     try:
         resp = requests.post(url, headers=headers, json=payload)
-        logging.info(f"📤 Enviando mensagem Cloud API → {to_number}: {body[:100]}...")
-        logging.info(f"Resposta Meta: {resp.status_code} - {resp.text}")
+        logging.warning(f"📤 Enviando mensagem Cloud API → {to_number}: {body[:100]}...")
+        logging.warning(f"Resposta Meta: {resp.status_code} - {resp.text}")
+        
+        # Verificar se houve erro na resposta
+        if resp.status_code != 200:
+            logging.error(f"❌ Erro ao enviar mensagem: Status {resp.status_code}")
+            return False
     except Exception as e:
         logging.error(f"❌ Erro ao enviar mensagem via Cloud API: {e}")
+        return False
 
 
 def send_whatsapp_document(to_number: str, file_content: bytes, filename: str, caption: str = None):
