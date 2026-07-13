@@ -353,7 +353,7 @@ def verificar_boletos_vencendo() -> List[Dict]:
         
         # Log detalhado da parcela para debug
         logging.warning(f"🔍 Parcela {parcela.get('installmentId')} - Campos: {list(parcela.keys())}")
-        logging.warning(f"🔍 Detalhes: ourNumber={parcela.get('ourNumber')}, billId={parcela.get('billId')}, clientId={parcela.get('clientId')}")
+        logging.warning(f"🔍 Detalhes: documentIdentificationId={parcela.get('documentIdentificationId')}, billId={parcela.get('billId')}, clientId={parcela.get('clientId')}")
         
         # Extrair dados da parcela
         vencimento_str = parcela.get("dueDate")
@@ -366,10 +366,10 @@ def verificar_boletos_vencendo() -> List[Dict]:
             logging.warning(f"⏭️ Título sem parcela gerada (sem installmentId), ignorando")
             continue
         
-        # Verificar se parcela tem nosso número (indica boleto gerado)
-        nosso_numero = parcela.get("ourNumber")
-        if not nosso_numero:
-            logging.warning(f"⏭️ Parcela {installment_id} sem nosso número (sem boleto gerado), ignorando")
+        # Verificar se parcela tem identificação de documento (indica boleto gerado)
+        document_identification_id = parcela.get("documentIdentificationId")
+        if not document_identification_id:
+            logging.warning(f"⏭️ Parcela {installment_id} sem documentIdentificationId (sem boleto gerado), ignorando")
             continue
         
         try:
