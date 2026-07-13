@@ -13,10 +13,10 @@ import {
 } from "@/components/ui/sidebar";
 
 const menuItems = [
-  { title: "Dashboard", url: "/dashboard", icon: Home },
-  { title: "Histórico", url: "/dashboard/history", icon: History },
-  { title: "Cobrança", url: "/dashboard/cobranca-config", icon: Bell },
-  { title: "Configurações", url: "/dashboard/settings", icon: Settings },
+  { title: "Dashboard", url: "/", icon: Home },
+  { title: "Histórico", url: "/history", icon: History },
+  { title: "Cobrança", url: "/cobranca-config", icon: Bell },
+  { title: "Configurações", url: "/settings", icon: Settings },
 ];
 
 export function AppSidebar() {
