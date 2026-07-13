@@ -1,6 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Bell, TrendingUp, Clock, CheckCircle } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 
 interface Stats {
   totalEnvios: number;
@@ -14,6 +17,8 @@ const Dashboard = () => {
     enviadosSucesso: 0,
     taxaSucesso: 0,
   });
+  const [dataInicio, setDataInicio] = useState("");
+  const [dataFim, setDataFim] = useState("");
 
   useEffect(() => {
     loadStats();
@@ -22,7 +27,11 @@ const Dashboard = () => {
   const loadStats = async () => {
     const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
     try {
-      const response = await fetch(`${API_URL}/cobranca-historico`);
+      const params = new URLSearchParams();
+      if (dataInicio) params.append("data_inicio", dataInicio);
+      if (dataFim) params.append("data_fim", dataFim);
+      const qs = params.toString();
+      const response = await fetch(`${API_URL}/cobranca-historico${qs ? `?${qs}` : ""}`);
       const data = await response.json();
       const historico = data.historico || [];
       
@@ -39,6 +48,12 @@ const Dashboard = () => {
     }
   };
 
+  const limpar = () => {
+    setDataInicio("");
+    setDataFim("");
+    setTimeout(loadStats, 0);
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -47,6 +62,23 @@ const Dashboard = () => {
           Visão geral do sistema de cobrança automática
         </p>
       </div>
+
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="dash-inicio" className="text-xs">Data início</Label>
+              <Input id="dash-inicio" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="w-40" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="dash-fim" className="text-xs">Data fim</Label>
+              <Input id="dash-fim" type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="w-40" />
+            </div>
+            <Button onClick={loadStats}>Aplicar</Button>
+            <Button variant="outline" onClick={limpar}>Limpar</Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
