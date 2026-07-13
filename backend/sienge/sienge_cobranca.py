@@ -356,12 +356,18 @@ def verificar_boletos_vencendo() -> List[Dict]:
         if not vencimento_str:
             continue
         
+        # Verificar se parcela tem ID válido (indica que parcela foi gerada)
+        installment_id = parcela.get("installmentId")
+        if not installment_id:
+            logging.warning(f"⏭️ Título sem parcela gerada (sem installmentId), ignorando")
+            continue
+        
         try:
             vencimento = datetime.strptime(vencimento_str, "%Y-%m-%d")
         except:
             continue
         
-        logging.warning(f"📅 Parcela {parcela.get('installmentId')}: vencimento={vencimento.date()}")
+        logging.warning(f"📅 Parcela {installment_id}: vencimento={vencimento.date()}")
         
         # Verificar se deve ser notificado hoje (baseado no vencimento)
         for lembrete in lembretes:
