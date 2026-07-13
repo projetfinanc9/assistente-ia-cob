@@ -253,7 +253,7 @@ const History = () => {
                 {selectedHistory.vencimento && (
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Vencimento</p>
-                    <p>{format(new Date(selectedHistory.vencimento), "dd/MM/yyyy", { locale: ptBR })}</p>
+                    <p>{selectedHistory.vencimento.split('T')[0].split('-').reverse().join('/')}</p>
                   </div>
                 )}
                 {selectedHistory.valor && (
