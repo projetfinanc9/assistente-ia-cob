@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, RefreshCw, MessageSquare, Send, Inbox } from "lucide-react";
+import { Search, RefreshCw, MessageSquare, Send, Inbox, Check, CheckCheck } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -63,6 +63,19 @@ export default function Messages() {
       return <Badge variant="secondary" className="bg-blue-100 text-blue-800"><Inbox className="h-3 w-3 mr-1" /> Recebida</Badge>;
     }
     return <Badge variant="secondary" className="bg-green-100 text-green-800"><Send className="h-3 w-3 mr-1" /> Enviada</Badge>;
+  };
+
+  const getReadStatus = (log: MessageLog) => {
+    if (log.tipo !== "enviada") return null;
+    
+    if (log.status === "read") {
+      return <CheckCheck className="h-4 w-4 text-blue-500" />;
+    } else if (log.status === "delivered") {
+      return <CheckCheck className="h-4 w-4 text-gray-500" />;
+    } else if (log.status === "sent") {
+      return <Check className="h-4 w-4 text-gray-500" />;
+    }
+    return null;
   };
 
   return (
@@ -136,11 +149,7 @@ export default function Messages() {
                       {log.mensagem_enviada || log.mensagem_recebida || "-"}
                     </TableCell>
                     <TableCell>
-                      {log.status ? (
-                        <Badge variant={log.status === "sucesso" ? "default" : "destructive"}>
-                          {log.status}
-                        </Badge>
-                      ) : (
+                      {getReadStatus(log) || (
                         <Badge variant="outline">-</Badge>
                       )}
                     </TableCell>

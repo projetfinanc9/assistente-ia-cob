@@ -84,41 +84,38 @@ async def executar_cobranca_agendada():
             if WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN:
                 numero = re.sub(r"\D", "", boleto["cliente_telefone"])
                 
-                # Validar número de telefone
-                # Se já tem código do país (55), deve ter 12 ou 13 dígitos
-                # Se não tem código do país, deve ter 10 ou 11 dígitos
-                if numero.startswith("55"):
-                    # Já tem código do país
-                    if len(numero) < 12 or len(numero) > 13:
-                        erro_msg = f"Número de telefone inválido (com código do país): {numero}"
-                        logging.warning(f"⚠️ {erro_msg}: {boleto.get('cliente_nome')}")
-                        if historico_id:
-                            try:
-                                atualizar_historico_cobranca(historico_id, {
-                                    "status": "erro",
-                                    "erro_mensagem": erro_msg
-                                })
-                                logging.warning(f"✅ Status atualizado para erro")
-                            except Exception as e:
-                                logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
-                        continue
-                else:
-                    # Não tem código do país
-                    if len(numero) < 10 or len(numero) > 11:
-                        erro_msg = f"Número de telefone inválido (sem código do país): {numero}"
-                        logging.warning(f"⚠️ {erro_msg}: {boleto.get('cliente_nome')}")
-                        if historico_id:
-                            try:
-                                atualizar_historico_cobranca(historico_id, {
-                                    "status": "erro",
-                                    "erro_mensagem": erro_msg
-                                })
-                                logging.warning(f"✅ Status atualizado para erro")
-                            except Exception as e:
-                                logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
-                        continue
-                    # Adicionar código do país 55
+                # Normalizar número de telefone
+                # Adicionar código do país se não tiver
+                if not numero.startswith("55"):
                     numero = "55" + numero
+                
+                # Validar e ajustar número de telefone
+                # Brasil: código país (55) + DDD (2 dígitos) + número (8 ou 9 dígitos)
+                # Total: 12 ou 13 dígitos
+                if len(numero) == 12:
+                    # Número de 8 dígitos (antigo), pode precisar adicionar o 9
+                    logging.warning(f"⚠️ Número com 8 dígitos detectado: {numero}")
+                    # Tentar adicionar o 9 após o DDD
+                    ddd = numero[:4]  # 55 + DDD
+                    numero_final = ddd + "9" + numero[4:]
+                    logging.warning(f"📱 Ajustando para 9 dígitos: {numero_final}")
+                    numero = numero_final
+                elif len(numero) == 13:
+                    # Número de 9 dígitos (padrão atual)
+                    pass
+                else:
+                    erro_msg = f"Número de telefone inválido: {numero} (deve ter 12 ou 13 dígitos com código do país)"
+                    logging.warning(f"⚠️ {erro_msg}: {boleto.get('cliente_nome')}")
+                    if historico_id:
+                        try:
+                            atualizar_historico_cobranca(historico_id, {
+                                "status": "erro",
+                                "erro_mensagem": erro_msg
+                            })
+                            logging.warning(f"✅ Status atualizado para erro")
+                        except Exception as e:
+                            logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
+                    continue
                 
                 if numero.startswith("55"):
                     # Verificar se deve enviar PDF do boleto
@@ -287,8 +284,17 @@ async def job_cobranca():
                 # Enviar via WhatsApp Cloud API se configurado
                 if WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN:
                     numero = re.sub(r"\D", "", boleto["cliente_telefone"])
-                    if numero.startswith("55"):
-                        send_whatsapp_cloud_message(numero, mensagem)
+                    
+                    # Normalizar número de telefone
+                    if not numero.startswith("55"):
+                        numero = "55" + numero
+                    
+                    # Ajustar para 9 dígitos se necessário
+                    if len(numero) == 12:
+                        ddd = numero[:4]
+                        numero = ddd + "9" + numero[4:]
+                    
+                    send_whatsapp_cloud_message(numero, mensagem)
         logging.info(f"✅ Job de cobrança concluído. {len(boletos)} boletos processados.")
     except Exception as e:
         logging.error(f"❌ Erro no job de cobrança: {e}")
