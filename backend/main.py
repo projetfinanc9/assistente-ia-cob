@@ -67,8 +67,8 @@ async def executar_cobranca_agendada():
             
             # Verificar se há telefone válido
             if not boleto.get("cliente_telefone"):
-                erro_msg = "Cliente não possui telefone cadastrado"
-                logging.warning(f"⚠️ {erro_msg}: {boleto.get('cliente_nome')}")
+                erro_msg = f"Cliente {boleto.get('cliente_nome')} não possui telefone cadastrado"
+                logging.warning(f"⚠️ {erro_msg}")
                 if historico_id:
                     try:
                         atualizar_historico_cobranca(historico_id, {
@@ -104,8 +104,8 @@ async def executar_cobranca_agendada():
                     # Número de 9 dígitos (padrão atual)
                     pass
                 else:
-                    erro_msg = f"Número de telefone inválido: {numero} (deve ter 12 ou 13 dígitos com código do país)"
-                    logging.warning(f"⚠️ {erro_msg}: {boleto.get('cliente_nome')}")
+                    erro_msg = f"Cliente {boleto.get('cliente_nome')} com número de telefone inválido: {numero}"
+                    logging.warning(f"⚠️ {erro_msg}")
                     if historico_id:
                         try:
                             atualizar_historico_cobranca(historico_id, {
@@ -174,7 +174,7 @@ async def executar_cobranca_agendada():
                                     try:
                                         atualizar_historico_cobranca(historico_id, {
                                             "status": "erro",
-                                            "erro_mensagem": str(e)
+                                            "erro_mensagem": gerar_mensagem_erro_estruturada(e, "envio de PDF", boleto.get("cliente_nome"))
                                         })
                                     except Exception as e2:
                                         logging.warning(f"⚠️ Erro ao atualizar histórico: {e2}")
@@ -427,6 +427,40 @@ logging.info(f"📱 WhatsApp Config - Verify Token: {WHATSAPP_VERIFY_TOKEN}")
 class Message(BaseModel):
     user: str
     text: str
+
+
+def gerar_mensagem_erro_estruturada(erro: Exception, contexto: str = "", cliente_nome: str = "") -> str:
+    """
+    Gera mensagem de erro estruturada e descritiva
+    """
+    erro_str = str(erro).lower()
+    
+    # Erros específicos de telefone
+    if "telefone" in erro_str or "phone" in erro_str or "celular" in erro_str:
+        return f"Cliente {cliente_nome} sem telefone cadastrado ou inválido"
+    
+    # Erros específicos de PDF
+    if "pdf" in erro_str or "documento" in erro_str:
+        return f"Erro ao processar PDF: {erro}"
+    
+    # Erros específicos de WhatsApp
+    if "whatsapp" in erro_str or "meta" in erro_str:
+        return f"Erro ao enviar via WhatsApp: {erro}"
+    
+    # Erros específicos de Sienge
+    if "sienge" in erro_str or "api" in erro_str:
+        return f"Erro ao buscar dados no Sienge: {erro}"
+    
+    # Erros específicos de Supabase
+    if "supabase" in erro_str or "banco" in erro_str or "database" in erro_str:
+        return f"Erro ao salvar no banco de dados: {erro}"
+    
+    # Erro genérico com contexto
+    if contexto:
+        return f"Erro em {contexto}: {erro}"
+    
+    # Erro genérico
+    return f"Erro: {erro}"
 
 class SiengeConfig(BaseModel):
     subdomain: str
@@ -1005,7 +1039,7 @@ async def testar_cobranca():
                                         from supabase_client import atualizar_historico_cobranca
                                         atualizar_historico_cobranca(historico_id, {
                                             "status": "erro",
-                                            "erro_mensagem": str(e)
+                                            "erro_mensagem": gerar_mensagem_erro_estruturada(e, "envio de PDF", boleto.get("cliente_nome"))
                                         })
                                     except Exception as e2:
                                         logging.warning(f"⚠️ Erro ao atualizar histórico com erro: {e2}")
@@ -1055,7 +1089,7 @@ async def testar_cobranca():
                                         from supabase_client import atualizar_historico_cobranca
                                         atualizar_historico_cobranca(historico_id, {
                                             "status": "erro",
-                                            "erro_mensagem": str(e)
+                                            "erro_mensagem": gerar_mensagem_erro_estruturada(e, "envio de mensagem", boleto.get("cliente_nome"))
                                         })
                                     except Exception as e2:
                                         logging.warning(f"⚠️ Erro ao atualizar histórico com erro: {e2}")
@@ -1104,7 +1138,7 @@ async def testar_cobranca():
                                     from supabase_client import atualizar_historico_cobranca
                                     atualizar_historico_cobranca(historico_id, {
                                         "status": "erro",
-                                        "erro_mensagem": str(e)
+                                        "erro_mensagem": gerar_mensagem_erro_estruturada(e, "envio de mensagem", boleto.get("cliente_nome"))
                                     })
                                 except Exception as e2:
                                     logging.warning(f"⚠️ Erro ao atualizar histórico com erro: {e2}")
