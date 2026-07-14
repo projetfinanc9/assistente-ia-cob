@@ -1232,12 +1232,13 @@ async def invalidar_cache_api(cache_key: str = "lista_clientes"):
 
 
 @app.post("/atualizar-cliente-sienge")
-async def atualizar_cliente_sienge(cliente_id: str):
+async def atualizar_cliente_sienge(cliente_id: str = None, cliente_nome: str = None):
     """
     Atualiza dados de um cliente específico do Sienge
     Invalida o cache e busca dados atualizados
+    Aceita cliente_id ou cliente_nome como parâmetro
     """
-    logging.warning(f"🔄 Iniciando atualização do cliente {cliente_id}")
+    logging.warning(f"🔄 Iniciando atualização do cliente - ID: {cliente_id}, Nome: {cliente_nome}")
     try:
         from sienge.sienge_cobranca import invalidar_cache
         from sienge.sienge_config import BASE_URL, json_headers
@@ -1248,20 +1249,36 @@ async def atualizar_cliente_sienge(cliente_id: str):
         invalidar_cache("lista_clientes")
         
         # Buscar dados atualizados do cliente
-        logging.warning(f"📡 Buscando dados do cliente {cliente_id} no Sienge...")
-        url = f"{BASE_URL}/customers/{cliente_id}"
+        if cliente_id:
+            logging.warning(f"📡 Buscando dados do cliente por ID {cliente_id} no Sienge...")
+            url = f"{BASE_URL}/customers/{cliente_id}"
+        elif cliente_nome:
+            logging.warning(f"📡 Buscando dados do cliente por nome {cliente_nome} no Sienge...")
+            url = f"{BASE_URL}/customers?name={cliente_nome}"
+        else:
+            return {"status": "error", "message": "cliente_id ou cliente_nome é obrigatório"}
+        
         logging.warning(f"📡 URL: {url}")
         r = requests.get(url, headers=json_headers, timeout=30)
         logging.warning(f"📡 Status code: {r.status_code}")
         
         if r.status_code == 200:
-            cliente_data = r.json()
-            logging.warning(f"✅ Dados do cliente atualizados: {cliente_data}")
-            return {
-                "status": "success",
-                "message": "Dados do cliente atualizados com sucesso",
-                "cliente": cliente_data
-            }
+            data = r.json()
+            # Se busca por nome, pegar o primeiro resultado
+            if cliente_nome and isinstance(data, dict) and "results" in data:
+                cliente_data = data["results"][0] if data["results"] else None
+            else:
+                cliente_data = data
+            
+            if cliente_data:
+                logging.warning(f"✅ Dados do cliente atualizados: {cliente_data}")
+                return {
+                    "status": "success",
+                    "message": "Dados do cliente atualizados com sucesso",
+                    "cliente": cliente_data
+                }
+            else:
+                return {"status": "error", "message": "Cliente não encontrado"}
         else:
             logging.warning(f"⚠️ Erro ao buscar dados do cliente: {r.status_code} - {r.text}")
             return {

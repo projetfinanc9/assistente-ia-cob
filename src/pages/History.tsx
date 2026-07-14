@@ -84,16 +84,24 @@ const History = () => {
   };
 
   const atualizarCliente = async () => {
-    if (!selectedHistory?.cliente_id) {
-      console.error("cliente_id não encontrado:", selectedHistory);
-      alert("Cliente ID não encontrado");
+    if (!selectedHistory?.cliente_id && !selectedHistory?.cliente) {
+      console.error("cliente_id e cliente não encontrados:", selectedHistory);
+      alert("Cliente não encontrado");
       return;
     }
     
-    console.log("Iniciando atualização do cliente:", selectedHistory.cliente_id);
+    console.log("Iniciando atualização do cliente - ID:", selectedHistory.cliente_id, "Nome:", selectedHistory.cliente);
     setUpdating(true);
     try {
-      const url = `${API_URL}/atualizar-cliente-sienge?cliente_id=${selectedHistory.cliente_id}`;
+      let url = `${API_URL}/atualizar-cliente-sienge`;
+      const params = new URLSearchParams();
+      if (selectedHistory.cliente_id) {
+        params.append("cliente_id", selectedHistory.cliente_id);
+      } else {
+        params.append("cliente_nome", selectedHistory.cliente);
+      }
+      url += `?${params.toString()}`;
+      
       console.log("URL da requisição:", url);
       const response = await fetch(url, {
         method: "POST"
