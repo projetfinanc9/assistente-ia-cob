@@ -1272,6 +1272,15 @@ async def atualizar_cliente_sienge(cliente_id: str = None, cliente_nome: str = N
             
             if cliente_data:
                 logging.warning(f"✅ Dados do cliente atualizados: {cliente_data}")
+                # Se busca por nome, usar o ID retornado para buscar novamente os dados atualizados
+                if cliente_nome and cliente_data.get("id"):
+                    logging.warning(f"📡 Buscando novamente dados do cliente por ID {cliente_data['id']} para garantir dados atualizados...")
+                    url_id = f"{BASE_URL}/customers/{cliente_data['id']}"
+                    r_id = requests.get(url_id, headers=json_headers, timeout=30)
+                    if r_id.status_code == 200:
+                        cliente_data = r_id.json()
+                        logging.warning(f"✅ Dados do cliente atualizados por ID: {cliente_data}")
+                
                 return {
                     "status": "success",
                     "message": "Dados do cliente atualizados com sucesso",

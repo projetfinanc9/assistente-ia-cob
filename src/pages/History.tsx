@@ -110,7 +110,16 @@ const History = () => {
       console.log("Resposta do servidor:", data);
       
       if (data.status === "success") {
-        alert("Dados do cliente atualizados com sucesso!");
+        // Verificar se o cliente tem telefone
+        const cliente = data.cliente;
+        const phones = cliente.phones || [];
+        console.log("Telefones do cliente:", phones);
+        
+        if (phones.length === 0) {
+          alert("Dados do cliente atualizados, mas ainda não possui telefone cadastrado. Verifique no Sienge.");
+        } else {
+          alert("Dados do cliente atualizados com sucesso!");
+        }
         loadHistories();
         setSelectedHistory(null);
       } else {
