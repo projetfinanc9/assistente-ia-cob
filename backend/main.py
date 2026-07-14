@@ -393,6 +393,9 @@ WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
 WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "construai123")
 
 # Log para debug - mostrar configurações do WhatsApp
+print(f"📱 WhatsApp Config - Phone Number ID: {WHATSAPP_PHONE_NUMBER_ID}")
+print(f"📱 WhatsApp Config - Token configurado: {'✅' if WHATSAPP_TOKEN else '❌'}")
+print(f"📱 WhatsApp Config - Verify Token: {WHATSAPP_VERIFY_TOKEN}")
 logging.info(f"📱 WhatsApp Config - Phone Number ID: {WHATSAPP_PHONE_NUMBER_ID}")
 logging.info(f"📱 WhatsApp Config - Token configurado: {'✅' if WHATSAPP_TOKEN else '❌'}")
 logging.info(f"📱 WhatsApp Config - Verify Token: {WHATSAPP_VERIFY_TOKEN}")
