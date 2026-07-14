@@ -48,6 +48,8 @@ def salvar_cache(cache_key: str, data: Dict):
         }
         with open(cache_file, 'w', encoding='utf-8') as f:
             json.dump(cache_data, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logging.warning(f"⚠️ Erro ao salvar cache {cache_key}: {e}")
 
 def invalidar_cache(cache_key: str):
     """Invalida um cache específico (deleta o arquivo)"""
