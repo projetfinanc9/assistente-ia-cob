@@ -1424,6 +1424,90 @@ async def webhook_whatsapp(request: Request):
             })
         except Exception as e:
             logging.warning(f"⚠️ Erro ao salvar log de mensagem recebida: {e}")
+        
+        # Verifica se é uma resposta de botão interativo
+        interactive = msg.get("interactive")
+        if interactive and interactive.get("type") == "button_reply":
+            button_reply = interactive.get("button_reply", {})
+            button_id = button_reply.get("id", "")
+            button_title = button_reply.get("title", "")
+            text = button_title  # Usa o título do botão como texto
+            logging.info(f"🔘 Botão clicado: {button_id} - {button_title}")
+        elif interactive and interactive.get("type") == "list_reply":
+            list_reply = interactive.get("list_reply", {})
+            item_id = list_reply.get("id", "")
+            item_title = list_reply.get("title", "")
+            logging.info(f"📋 List reply recebido: item_id={item_id}, item_title={item_title}")
+            
+            # Se for um item de lista, extrai o comando do ID
+            if item_id.startswith("item_"):
+                # Recupera o contexto para saber qual boleto foi selecionado
+                user_id = f"whatsapp:{from_number}"
+                ctx = usuarios_contexto.get(user_id, {})
+                logging.info(f"🔍 Contexto do usuário {user_id}: {ctx}")
+                
+                boletos = ctx.get("boletos_disponiveis", [])
+                logging.info(f"📋 Boletos disponíveis no contexto: {len(boletos)}")
+                
+                item_index = int(item_id.replace("item_", ""))
+                logging.info(f"🔢 Índice do item: {item_index}")
+                
+                if item_index < len(boletos):
+                    boleto = boletos[item_index]
+                    texto = f"boleto {boleto['titulo_id']} {boleto['parcela_id']}"
+                    text = texto  # Atualiza text com o comando do boleto
+                    logging.info(f"✅ Item da lista selecionado: {item_title} -> {texto}")
+                else:
+                    logging.warning(f"⚠️ Índice {item_index} fora do range (total: {len(boletos)})")
+                    text = item_title if item_title else ""
+            else:
+                logging.warning(f"⚠️ item_id não começa com 'item_': {item_id}")
+                text = item_title if item_title else ""
+        
+        # Proteção final: garantir que text sempre tem valor
+        if not text:
+            text = ""
+            logging.warning("⚠️ text está vazio após processamento, usando string vazia")
+
+        user_id = f"whatsapp:{from_number}"
+        
+        # Processar a mensagem
+        texto_resposta = processar_mensagem(user_id, text, from_number)
+        
+        # Gerar botões e lista de itens se necessário
+        botoes = None
+        list_items = None
+        
+        # Verifica se a resposta contém botões
+        if isinstance(texto_resposta, dict):
+            botoes = texto_resposta.get("buttons")
+            list_items = texto_resposta.get("list_items")
+            texto_resposta = texto_resposta.get("text", texto_resposta)
+        
+        # Envia resposta via Cloud API com botões ou lista
+        logging.info(f"📤 Enviando resposta para {from_number}...")
+        send_whatsapp_cloud_message(from_number, texto_resposta, botoes, list_items)
+        logging.info(f"✅ Resposta enviada com sucesso")
+        
+        # Salvar log de mensagem enviada no Supabase
+        try:
+            from supabase_client import salvar_log_mensagem
+            salvar_log_mensagem({
+                "usuario_id": user_id,
+                "telefone": from_number,
+                "mensagem_recebida": text,
+                "mensagem_enviada": texto_resposta,
+                "tipo": "enviada",
+                "status": "sent"
+            })
+        except Exception as e:
+            logging.warning(f"⚠️ Erro ao salvar log de mensagem enviada: {e}")
+        
+        return {"status": "success"}
+    
+    except Exception as e:
+        logging.error(f"❌ Erro ao processar webhook WhatsApp: {e}")
+        return {"status": "error", "message": str(e)}
 
 @app.post("/webhook-cobranca")
 async def webhook_cobranca(request: Request):
