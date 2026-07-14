@@ -30,6 +30,7 @@ interface CobrancaHistory {
   parcela_id?: number;
   dias_antes?: number;
   erro_mensagem?: string;
+  cliente_id?: string;
 }
 
 const History = () => {
@@ -39,6 +40,8 @@ const History = () => {
   const [selectedHistory, setSelectedHistory] = useState<CobrancaHistory | null>(null);
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
+  const [updating, setUpdating] = useState(false);
+  const [resending, setResending] = useState(false);
 
   useEffect(() => {
     loadHistories();
@@ -78,6 +81,56 @@ const History = () => {
     setDataFim("");
     setSearchTerm("");
     setTimeout(loadHistories, 0);
+  };
+
+  const atualizarCliente = async () => {
+    if (!selectedHistory?.cliente_id) return;
+    
+    setUpdating(true);
+    try {
+      const response = await fetch(`${API_URL}/atualizar-cliente-sienge?cliente_id=${selectedHistory.cliente_id}`, {
+        method: "POST"
+      });
+      const data = await response.json();
+      
+      if (data.status === "success") {
+        alert("Dados do cliente atualizados com sucesso!");
+        loadHistories();
+        setSelectedHistory(null);
+      } else {
+        alert(`Erro ao atualizar cliente: ${data.message}`);
+      }
+    } catch (error) {
+      console.error("Erro ao atualizar cliente:", error);
+      alert("Erro ao atualizar cliente");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const reenviarCobranca = async () => {
+    if (!selectedHistory?.id) return;
+    
+    setResending(true);
+    try {
+      const response = await fetch(`${API_URL}/reenviar-cobranca?historico_id=${selectedHistory.id}`, {
+        method: "POST"
+      });
+      const data = await response.json();
+      
+      if (data.status === "success") {
+        alert("Cobrança reenviada com sucesso!");
+        loadHistories();
+        setSelectedHistory(null);
+      } else {
+        alert(`Erro ao reenviar cobrança: ${data.message}`);
+      }
+    } catch (error) {
+      console.error("Erro ao reenviar cobrança:", error);
+      alert("Erro ao reenviar cobrança");
+    } finally {
+      setResending(false);
+    }
   };
 
   const filteredHistories = histories.filter(
@@ -288,6 +341,25 @@ const History = () => {
                   <div className="bg-destructive/10 border border-destructive/20 p-4 rounded-md text-sm text-destructive">
                     {selectedHistory.erro_mensagem}
                   </div>
+                </div>
+              )}
+              {selectedHistory.status === "erro" && (
+                <div className="flex gap-2 pt-4">
+                  <Button 
+                    onClick={atualizarCliente} 
+                    disabled={updating}
+                    variant="outline"
+                  >
+                    {updating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                    Atualizar dados do cliente
+                  </Button>
+                  <Button 
+                    onClick={reenviarCobranca} 
+                    disabled={resending}
+                  >
+                    {resending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                    Tentar novamente
+                  </Button>
                 </div>
               )}
             </CardContent>

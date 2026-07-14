@@ -1228,6 +1228,147 @@ async def invalidar_cache_api(cache_key: str = "lista_clientes"):
         logging.error(f"❌ Erro ao invalidar cache: {e}")
         return {"status": "error", "message": str(e)}
 
+
+@app.post("/atualizar-cliente-sienge")
+async def atualizar_cliente_sienge(cliente_id: str):
+    """
+    Atualiza dados de um cliente específico do Sienge
+    Invalida o cache e busca dados atualizados
+    """
+    try:
+        from sienge.sienge_cobranca import invalidar_cache
+        from sienge.sienge_config import BASE_URL, json_headers
+        import requests
+        
+        # Invalidar cache de clientes
+        invalidar_cache("lista_clientes")
+        
+        # Buscar dados atualizados do cliente
+        url = f"{BASE_URL}/customers/{cliente_id}"
+        r = requests.get(url, headers=json_headers, timeout=30)
+        
+        if r.status_code == 200:
+            cliente_data = r.json()
+            return {
+                "status": "success",
+                "message": "Dados do cliente atualizados com sucesso",
+                "cliente": cliente_data
+            }
+        else:
+            return {
+                "status": "error",
+                "message": f"Erro ao buscar dados do cliente: {r.status_code}"
+            }
+    except Exception as e:
+        logging.error(f"❌ Erro ao atualizar cliente do Sienge: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/reenviar-cobranca")
+async def reenviar_cobranca(historico_id: str):
+    """
+    Reenvia cobrança para um cliente específico baseado no histórico
+    """
+    try:
+        from supabase_client import buscar_historico_por_id
+        from datetime import datetime
+        
+        # Buscar histórico da cobrança
+        historico = buscar_historico_por_id(historico_id)
+        
+        if not historico:
+            return {"status": "error", "message": "Histórico não encontrado"}
+        
+        # Preparar dados do boleto
+        boleto = {
+            "cliente_id": historico.get("cliente_id"),
+            "cliente_nome": historico.get("cliente_nome"),
+            "cliente_telefone": historico.get("cliente_telefone"),
+            "titulo_id": historico.get("titulo_id"),
+            "parcela_id": historico.get("parcela_id"),
+            "vencimento": historico.get("vencimento"),
+            "valor": historico.get("valor"),
+            "dias_antes": historico.get("dias_antes"),
+            "mensagem_template": historico.get("mensagem_template"),
+            "envio_pdf": historico.get("tipo_envio") == "pdf"
+        }
+        
+        # Invalidar cache para garantir dados atualizados
+        from sienge.sienge_cobranca import invalidar_cache
+        invalidar_cache("lista_clientes")
+        
+        # Gerar mensagem
+        mensagem = gerar_mensagem_cobranca(boleto)
+        
+        # Verificar telefone
+        if not boleto.get("cliente_telefone"):
+            return {"status": "error", "message": "Cliente não possui telefone cadastrado"}
+        
+        numero = re.sub(r"\D", "", boleto["cliente_telefone"])
+        if len(numero) == 11 or len(numero) == 10:
+            numero = "55" + numero
+        
+        if not numero.startswith("55"):
+            return {"status": "error", "message": "Número de telefone inválido"}
+        
+        # Enviar via WhatsApp
+        if WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN:
+            try:
+                if boleto.get("envio_pdf"):
+                    from sienge.sienge_cobranca import baixar_pdf_boleto
+                    pdf_content = baixar_pdf_boleto(boleto["titulo_id"], boleto["parcela_id"])
+                    
+                    if pdf_content:
+                        filename = f"boleto_{boleto['titulo_id']}_{boleto['parcela_id']}.pdf"
+                        message_id = send_whatsapp_document(numero, pdf_content, filename, mensagem)
+                    else:
+                        message_id = send_whatsapp_cloud_message(numero, mensagem)
+                else:
+                    message_id = send_whatsapp_cloud_message(numero, mensagem)
+                
+                # Salvar novo histórico
+                from supabase_client import salvar_historico_cobranca, salvar_log_mensagem
+                novo_historico = salvar_historico_cobranca({
+                    "cliente_id": boleto["cliente_id"],
+                    "cliente_nome": boleto["cliente_nome"],
+                    "cliente_telefone": boleto["cliente_telefone"],
+                    "titulo_id": boleto["titulo_id"],
+                    "parcela_id": boleto["parcela_id"],
+                    "vencimento": boleto["vencimento"],
+                    "valor": boleto["valor"],
+                    "dias_antes": boleto["dias_antes"],
+                    "mensagem_template": boleto["mensagem_template"],
+                    "mensagem_enviada": mensagem,
+                    "status": "enviado",
+                    "tipo_envio": "pdf" if boleto.get("envio_pdf") else "texto",
+                    "enviado_em": datetime.now().isoformat()
+                })
+                
+                if message_id:
+                    salvar_log_mensagem({
+                        "usuario_id": f"whatsapp:{numero}",
+                        "telefone": numero,
+                        "mensagem_recebida": None,
+                        "mensagem_enviada": mensagem,
+                        "tipo": "enviada",
+                        "status": "sent",
+                        "whatsapp_message_id": message_id
+                    })
+                
+                return {
+                    "status": "success",
+                    "message": "Cobrança reenviada com sucesso",
+                    "historico_id": novo_historico.get("id") if isinstance(novo_historico, dict) else novo_historico
+                }
+            except Exception as e:
+                logging.error(f"❌ Erro ao reenviar cobrança: {e}")
+                return {"status": "error", "message": str(e)}
+        else:
+            return {"status": "error", "message": "WhatsApp não configurado"}
+    except Exception as e:
+        logging.error(f"❌ Erro ao reenviar cobrança: {e}")
+        return {"status": "error", "message": str(e)}
+
 # ============================================================
 # 🌐 WEBHOOK WHATSAPP CLOUD API (VERIFICAÇÃO)
 # ============================================================

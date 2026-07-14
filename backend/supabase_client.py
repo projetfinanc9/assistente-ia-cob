@@ -47,6 +47,21 @@ def salvar_historico_cobranca(dados_cobranca: dict):
         return None
 
 
+def buscar_historico_por_id(id: str):
+    """
+    Busca um histórico de cobrança específico por ID
+    """
+    if not supabase:
+        return None
+    
+    try:
+        response = supabase.table("historico_cobrancas").select("*").eq("id", id).execute()
+        return response.data[0] if response.data else None
+    except Exception as e:
+        print(f"❌ Erro ao buscar histórico por ID: {e}")
+        return None
+
+
 def atualizar_historico_cobranca(id: str, dados_atualizacao: dict):
     """
     Atualiza registro de cobrança no histórico
