@@ -442,6 +442,7 @@ def verificar_boletos_vencendo() -> List[Dict]:
                             break
                 
                 boletos_vencendo.append({
+                    "cliente_id": cliente_id,
                     "cliente_nome": cliente_nome,
                     "cliente_telefone": cliente_telefone,
                     "titulo_id": parcela.get("billId"),
