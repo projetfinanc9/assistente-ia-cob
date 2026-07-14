@@ -786,7 +786,9 @@ async def listar_historico_cobrancas(
                 "tipo_envio": item.get("tipo_envio"),
                 "titulo_id": item.get("titulo_id"),
                 "parcela_id": item.get("parcela_id"),
-                "dias_antes": item.get("dias_antes")
+                "dias_antes": item.get("dias_antes"),
+                "cliente_id": item.get("cliente_id"),
+                "erro_mensagem": item.get("erro_mensagem")
             })
         
         return {"historico": historico_formatado}
