@@ -139,9 +139,10 @@ async def executar_cobranca_agendada():
                                 
                                 # Salvar log de mensagem enviada com message_id
                                 if message_id:
+                                    logging.warning(f"💾 Tentando salvar log de mensagem com message_id: {message_id}")
                                     try:
                                         from supabase_client import salvar_log_mensagem
-                                        salvar_log_mensagem({
+                                        resultado = salvar_log_mensagem({
                                             "usuario_id": f"whatsapp:{numero}",
                                             "telefone": numero,
                                             "mensagem_recebida": None,
@@ -150,9 +151,11 @@ async def executar_cobranca_agendada():
                                             "status": "sent",
                                             "whatsapp_message_id": message_id
                                         })
-                                        logging.info(f"💾 Log de mensagem salvo com message_id: {message_id}")
+                                        logging.warning(f"💾 Log de mensagem salvo com message_id: {message_id} - Resultado: {resultado}")
                                     except Exception as e:
                                         logging.warning(f"⚠️ Erro ao salvar log de mensagem enviada: {e}")
+                                else:
+                                    logging.warning(f"⚠️ message_id é None, não salvando log")
                                 
                                 # Atualizar status no histórico
                                 if historico_id:
