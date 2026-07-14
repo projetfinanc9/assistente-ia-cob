@@ -1090,6 +1090,23 @@ async def verify_whatsapp(request: Request):
         logging.warning("⚠️ Webhook WhatsApp verificação falhou.")
         return PlainTextResponse("Verification failed", status_code=403)
 
+@app.get("/webhook-cobranca")
+async def verify_whatsapp_cobranca(request: Request):
+    """
+    Endpoint de verificação do Meta específico para cobrança (GET)
+    """
+    params = dict(request.query_params)
+    mode = params.get("hub.mode")
+    token = params.get("hub.verify_token")
+    challenge = params.get("hub.challenge")
+
+    if mode == "subscribe" and token == WHATSAPP_VERIFY_TOKEN:
+        logging.info("✅ Webhook Cobrança verificado pelo Meta.")
+        return PlainTextResponse(challenge or "")
+    else:
+        logging.warning("⚠️ Webhook Cobrança verificação falhou.")
+        return PlainTextResponse("Verification failed", status_code=403)
+
 # ============================================================
 # 💬 WEBHOOK WHATSAPP CLOUD API (RECEBIMENTO)
 # ============================================================
@@ -1322,6 +1339,84 @@ async def webhook_whatsapp(request: Request):
         # Deduplicação: verificar se já processamos esta mensagem
         if message_id and message_id in processed_messages:
             logging.warning(f"⚠️ Mensagem {message_id} já processada, ignorando")
+            return {"status": "duplicate"}
+        
+        # Marcar mensagem como processada
+        if message_id:
+            processed_messages.add(message_id)
+            # Manter apenas os últimos 1000 IDs para evitar crescimento infinito
+            if len(processed_messages) > 1000:
+                processed_messages.clear()
+        
+        # Inicializar text com valor padrão (proteção contra UnboundLocalError)
+        text = msg.get("text", {}).get("body", "")
+        
+        # Salvar log de mensagem recebida no Supabase
+        try:
+            from supabase_client import salvar_log_mensagem
+            salvar_log_mensagem({
+                "usuario_id": f"whatsapp:{from_number}",
+                "telefone": from_number,
+                "mensagem_recebida": text,
+                "mensagem_enviada": None,
+                "tipo": "recebida",
+                "status": "sucesso"
+            })
+        except Exception as e:
+            logging.warning(f"⚠️ Erro ao salvar log de mensagem recebida: {e}")
+
+@app.post("/webhook-cobranca")
+async def webhook_cobranca(request: Request):
+    """
+    Recebe mensagens e status do WhatsApp Cloud API específico para cobrança (POST)
+    """
+    data = await request.json()
+    logging.info(f"📲 Webhook Cobrança recebido: {data}")
+
+    try:
+        entry_list = data.get("entry", [])
+        if not entry_list:
+            return {"status": "no_entry"}
+
+        changes = entry_list[0].get("changes", [])
+        if not changes:
+            return {"status": "no_changes"}
+
+        value = changes[0].get("value", {})
+        
+        # Verificar se é webhook de status (mensagens enviadas)
+        statuses = value.get("statuses", [])
+        if statuses:
+            # Processar status de mensagens enviadas (sent/delivered/read)
+            for status in statuses:
+                message_id = status.get("id")
+                status_type = status.get("status")  # sent, delivered, read
+                recipient_id = status.get("recipient_id")
+                timestamp = status.get("timestamp")
+                
+                logging.info(f"📊 [Cobrança] Status da mensagem {message_id}: {status_type} para {recipient_id}")
+                
+                # Atualizar status no banco de dados
+                try:
+                    from supabase_client import atualizar_status_mensagem
+                    atualizar_status_mensagem(message_id, status_type)
+                except Exception as e:
+                    logging.warning(f"⚠️ Erro ao atualizar status da mensagem: {e}")
+            
+            return {"status": "status_processed"}
+        
+        # Verificar se é webhook de mensagens recebidas
+        messages = value.get("messages", [])
+        if not messages:
+            return {"status": "no_messages"}
+
+        msg = messages[0]
+        from_number = msg.get("from")             # ex: "559193808761"
+        message_id = msg.get("id")               # ID único da mensagem para deduplicação
+        
+        # Deduplicação: verificar se já processamos esta mensagem
+        if message_id and message_id in processed_messages:
+            logging.warning(f"⚠️ [Cobrança] Mensagem {message_id} já processada, ignorando")
             return {"status": "duplicate"}
         
         # Marcar mensagem como processada
