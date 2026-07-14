@@ -135,6 +135,7 @@ async def executar_cobranca_agendada():
                             try:
                                 message_id = send_whatsapp_document(numero, pdf_content, filename, mensagem)
                                 logging.warning(f"✅ PDF enviado com sucesso para {numero}")
+                                logging.warning(f"🆔 message_id retornado: {message_id}")
                                 
                                 # Salvar log de mensagem enviada com message_id
                                 if message_id:
