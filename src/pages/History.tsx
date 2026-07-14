@@ -84,14 +84,22 @@ const History = () => {
   };
 
   const atualizarCliente = async () => {
-    if (!selectedHistory?.cliente_id) return;
+    if (!selectedHistory?.cliente_id) {
+      console.error("cliente_id não encontrado:", selectedHistory);
+      alert("Cliente ID não encontrado");
+      return;
+    }
     
+    console.log("Iniciando atualização do cliente:", selectedHistory.cliente_id);
     setUpdating(true);
     try {
-      const response = await fetch(`${API_URL}/atualizar-cliente-sienge?cliente_id=${selectedHistory.cliente_id}`, {
+      const url = `${API_URL}/atualizar-cliente-sienge?cliente_id=${selectedHistory.cliente_id}`;
+      console.log("URL da requisição:", url);
+      const response = await fetch(url, {
         method: "POST"
       });
       const data = await response.json();
+      console.log("Resposta do servidor:", data);
       
       if (data.status === "success") {
         alert("Dados do cliente atualizados com sucesso!");

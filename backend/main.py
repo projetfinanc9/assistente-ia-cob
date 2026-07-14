@@ -1237,26 +1237,33 @@ async def atualizar_cliente_sienge(cliente_id: str):
     Atualiza dados de um cliente específico do Sienge
     Invalida o cache e busca dados atualizados
     """
+    logging.warning(f"🔄 Iniciando atualização do cliente {cliente_id}")
     try:
         from sienge.sienge_cobranca import invalidar_cache
         from sienge.sienge_config import BASE_URL, json_headers
         import requests
         
         # Invalidar cache de clientes
+        logging.warning(f"🗑️ Invalidando cache de clientes...")
         invalidar_cache("lista_clientes")
         
         # Buscar dados atualizados do cliente
+        logging.warning(f"📡 Buscando dados do cliente {cliente_id} no Sienge...")
         url = f"{BASE_URL}/customers/{cliente_id}"
+        logging.warning(f"📡 URL: {url}")
         r = requests.get(url, headers=json_headers, timeout=30)
+        logging.warning(f"📡 Status code: {r.status_code}")
         
         if r.status_code == 200:
             cliente_data = r.json()
+            logging.warning(f"✅ Dados do cliente atualizados: {cliente_data}")
             return {
                 "status": "success",
                 "message": "Dados do cliente atualizados com sucesso",
                 "cliente": cliente_data
             }
         else:
+            logging.warning(f"⚠️ Erro ao buscar dados do cliente: {r.status_code} - {r.text}")
             return {
                 "status": "error",
                 "message": f"Erro ao buscar dados do cliente: {r.status_code}"
