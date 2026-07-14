@@ -127,6 +127,33 @@ def buscar_logs_mensagens(filtros: dict = None):
         return []
 
 
+def atualizar_status_mensagem(message_id: str, status: str):
+    """
+    Atualiza o status de uma mensagem no banco de dados
+    status pode ser: sent, delivered, read
+    """
+    if not supabase:
+        return None
+    
+    try:
+        # Buscar a mensagem pelo message_id (whatsapp_message_id)
+        response = supabase.table("logs_mensagens").select("*").eq("whatsapp_message_id", message_id).execute()
+        
+        if response.data and len(response.data) > 0:
+            # Atualizar o status
+            update_response = supabase.table("logs_mensagens").update({
+                "status": status
+            }).eq("whatsapp_message_id", message_id).execute()
+            print(f"✅ Status da mensagem {message_id} atualizado para {status}")
+            return update_response.data[0] if update_response.data else None
+        else:
+            print(f"⚠️ Mensagem {message_id} não encontrada no banco")
+            return None
+    except Exception as e:
+        print(f"❌ Erro ao atualizar status da mensagem: {e}")
+        return None
+
+
 def buscar_configuracao_cobranca():
     """
     Busca configuração de cobrança do banco de dados com lembretes separados

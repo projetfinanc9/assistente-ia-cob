@@ -160,8 +160,23 @@ async def executar_cobranca_agendada():
                         else:
                             # Se não conseguir baixar PDF, enviar apenas texto
                             logging.warning(f"⚠️ Não foi possível baixar PDF, enviando apenas texto")
-                            send_whatsapp_cloud_message(numero, mensagem)
+                            message_id = send_whatsapp_cloud_message(numero, mensagem)
                             logging.warning(f"✅ Mensagem enviada para {boleto['cliente_nome']}")
+                            
+                            # Salvar log de mensagem enviada com message_id
+                            try:
+                                from supabase_client import salvar_log_mensagem
+                                salvar_log_mensagem({
+                                    "usuario_id": f"whatsapp:{numero}",
+                                    "telefone": numero,
+                                    "mensagem_recebida": None,
+                                    "mensagem_enviada": mensagem,
+                                    "tipo": "enviada",
+                                    "status": "sent",
+                                    "whatsapp_message_id": message_id
+                                })
+                            except Exception as e:
+                                logging.warning(f"⚠️ Erro ao salvar log de mensagem enviada: {e}")
                             
                             if historico_id:
                                 try:
@@ -174,8 +189,23 @@ async def executar_cobranca_agendada():
                                     logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
                     else:
                         # Enviar apenas texto
-                        send_whatsapp_cloud_message(numero, mensagem)
+                        message_id = send_whatsapp_cloud_message(numero, mensagem)
                         logging.warning(f"✅ Mensagem enviada para {boleto['cliente_nome']}")
+                        
+                        # Salvar log de mensagem enviada com message_id
+                        try:
+                            from supabase_client import salvar_log_mensagem
+                            salvar_log_mensagem({
+                                "usuario_id": f"whatsapp:{numero}",
+                                "telefone": numero,
+                                "mensagem_recebida": None,
+                                "mensagem_enviada": mensagem,
+                                "tipo": "enviada",
+                                "status": "sent",
+                                "whatsapp_message_id": message_id
+                            })
+                        except Exception as e:
+                            logging.warning(f"⚠️ Erro ao salvar log de mensagem enviada: {e}")
                         
                         # Atualizar status no histórico
                         if historico_id:
@@ -294,7 +324,22 @@ async def job_cobranca():
                         ddd = numero[:4]
                         numero = ddd + "9" + numero[4:]
                     
-                    send_whatsapp_cloud_message(numero, mensagem)
+                    message_id = send_whatsapp_cloud_message(numero, mensagem)
+                    
+                    # Salvar log de mensagem enviada com message_id
+                    try:
+                        from supabase_client import salvar_log_mensagem
+                        salvar_log_mensagem({
+                            "usuario_id": f"whatsapp:{numero}",
+                            "telefone": numero,
+                            "mensagem_recebida": None,
+                            "mensagem_enviada": mensagem,
+                            "tipo": "enviada",
+                            "status": "sent",
+                            "whatsapp_message_id": message_id
+                        })
+                    except Exception as e:
+                        logging.warning(f"⚠️ Erro ao salvar log de mensagem enviada: {e}")
         logging.info(f"✅ Job de cobrança concluído. {len(boletos)} boletos processados.")
     except Exception as e:
         logging.error(f"❌ Erro no job de cobrança: {e}")
@@ -862,8 +907,24 @@ async def testar_cobranca():
                                 # Se falhar ao baixar PDF, enviar apenas mensagem
                                 logging.warning(f"📤 Enviando mensagem de texto para {numero}")
                                 try:
-                                    send_whatsapp_cloud_message(numero, mensagem)
+                                    message_id = send_whatsapp_cloud_message(numero, mensagem)
                                     logging.warning(f"✅ Mensagem enviada com sucesso para {numero}")
+                                    
+                                    # Salvar log de mensagem enviada com message_id
+                                    try:
+                                        from supabase_client import salvar_log_mensagem
+                                        salvar_log_mensagem({
+                                            "usuario_id": f"whatsapp:{numero}",
+                                            "telefone": numero,
+                                            "mensagem_recebida": None,
+                                            "mensagem_enviada": mensagem,
+                                            "tipo": "enviada",
+                                            "status": "sent",
+                                            "whatsapp_message_id": message_id
+                                        })
+                                    except Exception as e:
+                                        logging.warning(f"⚠️ Erro ao salvar log de mensagem enviada: {e}")
+                                    
                                     # Atualizar status no histórico
                                     try:
                                         from supabase_client import atualizar_historico_cobranca
@@ -896,8 +957,24 @@ async def testar_cobranca():
                             # Enviar apenas mensagem de texto
                             logging.warning(f"📤 Enviando mensagem de texto para {numero}")
                             try:
-                                send_whatsapp_cloud_message(numero, mensagem)
+                                message_id = send_whatsapp_cloud_message(numero, mensagem)
                                 logging.warning(f"✅ Mensagem enviada com sucesso para {numero}")
+                                
+                                # Salvar log de mensagem enviada com message_id
+                                try:
+                                    from supabase_client import salvar_log_mensagem
+                                    salvar_log_mensagem({
+                                        "usuario_id": f"whatsapp:{numero}",
+                                        "telefone": numero,
+                                        "mensagem_recebida": None,
+                                        "mensagem_enviada": mensagem,
+                                        "tipo": "enviada",
+                                        "status": "sent",
+                                        "whatsapp_message_id": message_id
+                                    })
+                                except Exception as e:
+                                    logging.warning(f"⚠️ Erro ao salvar log de mensagem enviada: {e}")
+                                
                                 # Atualizar status no histórico
                                 try:
                                     from supabase_client import atualizar_historico_cobranca
@@ -1115,6 +1192,18 @@ def send_whatsapp_cloud_message(to_number: str, body: str, buttons: list = None,
         if resp.status_code != 200:
             logging.error(f"❌ Erro ao enviar mensagem: Status {resp.status_code}")
             return False
+        
+        # Extrair message_id da resposta para rastrear status
+        try:
+            resp_data = resp.json()
+            message_id = resp_data.get("messages", [{}])[0].get("id")
+            if message_id:
+                logging.info(f"🆔 Message ID: {message_id}")
+                return message_id
+        except Exception as e:
+            logging.warning(f"⚠️ Erro ao extrair message_id: {e}")
+        
+        return True
     except Exception as e:
         logging.error(f"❌ Erro ao enviar mensagem via Cloud API: {e}")
         return False
@@ -1184,7 +1273,7 @@ def send_whatsapp_document(to_number: str, file_content: bytes, filename: str, c
 @app.post("/webhook-whatsapp")
 async def webhook_whatsapp(request: Request):
     """
-    Recebe mensagens do WhatsApp Cloud API (POST)
+    Recebe mensagens e status do WhatsApp Cloud API (POST)
     """
     data = await request.json()
     logging.info(f"📲 Webhook WhatsApp recebido: {data}")
@@ -1199,6 +1288,29 @@ async def webhook_whatsapp(request: Request):
             return {"status": "no_changes"}
 
         value = changes[0].get("value", {})
+        
+        # Verificar se é webhook de status (mensagens enviadas)
+        statuses = value.get("statuses", [])
+        if statuses:
+            # Processar status de mensagens enviadas (sent/delivered/read)
+            for status in statuses:
+                message_id = status.get("id")
+                status_type = status.get("status")  # sent, delivered, read
+                recipient_id = status.get("recipient_id")
+                timestamp = status.get("timestamp")
+                
+                logging.info(f"📊 Status da mensagem {message_id}: {status_type} para {recipient_id}")
+                
+                # Atualizar status no banco de dados
+                try:
+                    from supabase_client import atualizar_status_mensagem
+                    atualizar_status_mensagem(message_id, status_type)
+                except Exception as e:
+                    logging.warning(f"⚠️ Erro ao atualizar status da mensagem: {e}")
+            
+            return {"status": "status_processed"}
+        
+        # Verificar se é webhook de mensagens recebidas
         messages = value.get("messages", [])
         if not messages:
             return {"status": "no_messages"}
