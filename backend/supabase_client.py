@@ -10,14 +10,18 @@ load_dotenv()
 # Configurações do Supabase
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 # Criar cliente Supabase
 supabase: Client = None
 
 if SUPABASE_URL and SUPABASE_KEY:
     try:
-        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-        print("✅ Cliente Supabase inicializado com sucesso")
+        # Usar SERVICE_ROLE_KEY se disponível (tem permissões completas para ignorar RLS)
+        key_to_use = SUPABASE_SERVICE_ROLE_KEY if SUPABASE_SERVICE_ROLE_KEY else SUPABASE_KEY
+        key_type = "SERVICE_ROLE" if SUPABASE_SERVICE_ROLE_KEY else "ANON"
+        supabase = create_client(SUPABASE_URL, key_to_use)
+        print(f"✅ Cliente Supabase inicializado com sucesso (usando {key_type} key)")
     except Exception as e:
         print(f"❌ Erro ao inicializar cliente Supabase: {e}")
 else:
