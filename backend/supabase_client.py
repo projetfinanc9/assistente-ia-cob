@@ -151,7 +151,15 @@ def atualizar_status_mensagem(message_id: str, status: str):
             }).eq("whatsapp_message_id", message_id).execute()
             print(f"✅ Status da mensagem {message_id} atualizado para {status}")
             print(f"✅ Resultado da atualização: {update_response.data}")
-            return update_response.data[0] if update_response.data else None
+            
+            # Buscar novamente para confirmar atualização
+            verify_response = supabase.table("logs_mensagens").select("*").eq("whatsapp_message_id", message_id).execute()
+            if verify_response.data and len(verify_response.data) > 0:
+                print(f"✅ Verificação após update: status = {verify_response.data[0].get('status')}")
+                return verify_response.data[0]
+            else:
+                print(f"⚠️ Verificação após update falhou")
+                return None
         else:
             print(f"⚠️ Mensagem {message_id} não encontrada no banco")
             print(f"⚠️ response.data: {response.data}")
