@@ -1356,6 +1356,7 @@ async def webhook_whatsapp(request: Request):
     Recebe mensagens e status do WhatsApp Cloud API (POST)
     """
     data = await request.json()
+    print(f"📲 [WEBHOOK] Webhook WhatsApp recebido: {data}")
     logging.info(f"📲 Webhook WhatsApp recebido: {data}")
 
     try:
@@ -1372,6 +1373,7 @@ async def webhook_whatsapp(request: Request):
         # Verificar se é webhook de status (mensagens enviadas)
         statuses = value.get("statuses", [])
         if statuses:
+            print(f"📊 [WEBHOOK] Processando {len(statuses)} status updates")
             # Processar status de mensagens enviadas (sent/delivered/read)
             for status in statuses:
                 message_id = status.get("id")
@@ -1379,13 +1381,16 @@ async def webhook_whatsapp(request: Request):
                 recipient_id = status.get("recipient_id")
                 timestamp = status.get("timestamp")
                 
+                print(f"📊 [WEBHOOK] Status da mensagem {message_id}: {status_type} para {recipient_id}")
                 logging.info(f"📊 Status da mensagem {message_id}: {status_type} para {recipient_id}")
                 
                 # Atualizar status no banco de dados
                 try:
                     from supabase_client import atualizar_status_mensagem
-                    atualizar_status_mensagem(message_id, status_type)
+                    resultado = atualizar_status_mensagem(message_id, status_type)
+                    print(f"✅ [WEBHOOK] Status atualizado no banco: {resultado}")
                 except Exception as e:
+                    print(f"⚠️ [WEBHOOK] Erro ao atualizar status da mensagem: {e}")
                     logging.warning(f"⚠️ Erro ao atualizar status da mensagem: {e}")
             
             return {"status": "status_processed"}
@@ -1524,6 +1529,7 @@ async def webhook_cobranca(request: Request):
     Recebe mensagens e status do WhatsApp Cloud API específico para cobrança (POST)
     """
     data = await request.json()
+    print(f"📲 [COBRANÇA] Webhook Cobrança recebido: {data}")
     logging.info(f"📲 Webhook Cobrança recebido: {data}")
 
     try:
@@ -1540,6 +1546,7 @@ async def webhook_cobranca(request: Request):
         # Verificar se é webhook de status (mensagens enviadas)
         statuses = value.get("statuses", [])
         if statuses:
+            print(f"📊 [COBRANÇA] Processando {len(statuses)} status updates")
             # Processar status de mensagens enviadas (sent/delivered/read)
             for status in statuses:
                 message_id = status.get("id")
@@ -1547,13 +1554,16 @@ async def webhook_cobranca(request: Request):
                 recipient_id = status.get("recipient_id")
                 timestamp = status.get("timestamp")
                 
+                print(f"📊 [COBRANÇA] Status da mensagem {message_id}: {status_type} para {recipient_id}")
                 logging.info(f"📊 [Cobrança] Status da mensagem {message_id}: {status_type} para {recipient_id}")
                 
                 # Atualizar status no banco de dados
                 try:
                     from supabase_client import atualizar_status_mensagem
-                    atualizar_status_mensagem(message_id, status_type)
+                    resultado = atualizar_status_mensagem(message_id, status_type)
+                    print(f"✅ [COBRANÇA] Status atualizado no banco: {resultado}")
                 except Exception as e:
+                    print(f"⚠️ [COBRANÇA] Erro ao atualizar status da mensagem: {e}")
                     logging.warning(f"⚠️ Erro ao atualizar status da mensagem: {e}")
             
             return {"status": "status_processed"}
