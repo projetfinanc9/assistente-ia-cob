@@ -133,21 +133,28 @@ def atualizar_status_mensagem(message_id: str, status: str):
     status pode ser: sent, delivered, read
     """
     if not supabase:
+        print("⚠️ Cliente Supabase não inicializado")
         return None
     
     try:
+        print(f"🔍 Buscando mensagem com whatsapp_message_id: {message_id}")
         # Buscar a mensagem pelo message_id (whatsapp_message_id)
         response = supabase.table("logs_mensagens").select("*").eq("whatsapp_message_id", message_id).execute()
         
+        print(f"🔍 Resultado da busca: {len(response.data) if response.data else 0} mensagens encontradas")
+        
         if response.data and len(response.data) > 0:
+            print(f"🔍 Mensagem encontrada: {response.data[0]}")
             # Atualizar o status
             update_response = supabase.table("logs_mensagens").update({
                 "status": status
             }).eq("whatsapp_message_id", message_id).execute()
             print(f"✅ Status da mensagem {message_id} atualizado para {status}")
+            print(f"✅ Resultado da atualização: {update_response.data}")
             return update_response.data[0] if update_response.data else None
         else:
             print(f"⚠️ Mensagem {message_id} não encontrada no banco")
+            print(f"⚠️ response.data: {response.data}")
             return None
     except Exception as e:
         print(f"❌ Erro ao atualizar status da mensagem: {e}")
