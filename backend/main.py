@@ -392,6 +392,11 @@ WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
 WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "construai123")
 
+# Log para debug - mostrar configurações do WhatsApp
+logging.info(f"📱 WhatsApp Config - Phone Number ID: {WHATSAPP_PHONE_NUMBER_ID}")
+logging.info(f"📱 WhatsApp Config - Token configurado: {'✅' if WHATSAPP_TOKEN else '❌'}")
+logging.info(f"📱 WhatsApp Config - Verify Token: {WHATSAPP_VERIFY_TOKEN}")
+
 # ============================================================
 # 📩 MODELOS DE DADOS
 # ============================================================
@@ -587,6 +592,61 @@ async def mensagem(msg: Message):
 
         if acao == "link_boleto":
             t, p = parametros.get("titulo_id"), parametros.get("parcela_id")
+            
+            # Baixar PDF do boleto e enviar como anexo
+            try:
+                from sienge.sienge_cobranca import baixar_pdf_boleto
+                pdf_content = baixar_pdf_boleto(t, p)
+                
+                if pdf_content:
+                    # Enviar PDF como documento via WhatsApp
+                    # Extrair número do usuário do contexto
+                    ctx = usuarios_contexto.get(msg.user, {})
+                    documento = ctx.get("documento", "")
+                    
+                    # Buscar cliente para obter telefone
+                    if documento:
+                        resultado = buscar_boletos_por_documento(documento)
+                        if "boletos" in resultado and resultado["boletos"]:
+                            # Encontrar o boleto específico para obter telefone
+                            for boleto in resultado["boletos"]:
+                                if boleto["titulo_id"] == t and boleto["parcela_id"] == p:
+                                    telefone = boleto.get("cliente_telefone")
+                                    if telefone:
+                                        # Normalizar telefone
+                                        numero = re.sub(r"\D", "", telefone)
+                                        if not numero.startswith("55"):
+                                            numero = "55" + numero
+                                        if len(numero) == 12:
+                                            ddd = numero[:4]
+                                            numero = ddd + "9" + numero[4:]
+                                        
+                                        # Enviar PDF
+                                        filename = f"boleto_{t}_{p}.pdf"
+                                        send_whatsapp_document(numero, pdf_content, filename, f"📄 Segunda via do boleto {t}/{p}")
+                                        
+                                        # Salvar log de mensagem enviada
+                                        try:
+                                            from supabase_client import salvar_log_mensagem
+                                            salvar_log_mensagem({
+                                                "usuario_id": f"whatsapp:{numero}",
+                                                "telefone": numero,
+                                                "mensagem_recebida": None,
+                                                "mensagem_enviada": f"PDF do boleto {t}/{p}",
+                                                "tipo": "enviada",
+                                                "status": "sent"
+                                            })
+                                        except Exception as e:
+                                            logging.warning(f"⚠️ Erro ao salvar log de mensagem enviada: {e}")
+                                        
+                                        return {
+                                            "text": f"✅ *PDF do boleto {t}/{p} enviado com sucesso!*",
+                                            "buttons": menu_inicial
+                                        }
+            except Exception as e:
+                logging.warning(f"⚠️ Erro ao baixar/enviar PDF: {e}")
+            
+            # Fallback: enviar link se falhar o PDF
             return {"text": gerar_link_boleto(t, p), "buttons": menu_inicial}
 
         # ========================================================
