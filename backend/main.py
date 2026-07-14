@@ -1555,6 +1555,7 @@ async def webhook_whatsapp(request: Request):
         logging.info(f"📤 Enviando resposta para {from_number}...")
         message_id = send_whatsapp_cloud_message(from_number, texto_resposta, botoes, list_items)
         logging.info(f"✅ Resposta enviada com sucesso")
+        logging.warning(f"🆔 message_id retornado pelo send_whatsapp_cloud_message: {message_id}")
         
         # Salvar log de mensagem enviada no Supabase
         try:
@@ -1570,9 +1571,12 @@ async def webhook_whatsapp(request: Request):
             # Salvar whatsapp_message_id se disponível
             if message_id:
                 dados_log["whatsapp_message_id"] = message_id
-                logging.info(f"💾 Salvando message_id: {message_id}")
+                logging.warning(f"💾 Salvando message_id no log: {message_id}")
+            else:
+                logging.warning(f"⚠️ message_id é None, não será salvo")
             
-            salvar_log_mensagem(dados_log)
+            resultado = salvar_log_mensagem(dados_log)
+            logging.warning(f"💾 Log de mensagem salvo: {resultado}")
         except Exception as e:
             logging.warning(f"⚠️ Erro ao salvar log de mensagem enviada: {e}")
         
