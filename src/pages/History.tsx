@@ -29,6 +29,7 @@ interface CobrancaHistory {
   titulo_id?: number;
   parcela_id?: number;
   dias_antes?: number;
+  erro_mensagem?: string;
 }
 
 const History = () => {
@@ -281,6 +282,14 @@ const History = () => {
                   {selectedHistory.mensagem}
                 </div>
               </div>
+              {selectedHistory.status === "erro" && selectedHistory.erro_mensagem && (
+                <div>
+                  <p className="text-sm font-medium text-destructive mb-2">Erro</p>
+                  <div className="bg-destructive/10 border border-destructive/20 p-4 rounded-md text-sm text-destructive">
+                    {selectedHistory.erro_mensagem}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
