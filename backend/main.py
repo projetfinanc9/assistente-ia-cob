@@ -133,8 +133,25 @@ async def executar_cobranca_agendada():
                             logging.warning(f"📤 Enviando PDF via WhatsApp para {numero}")
                             logging.warning(f"🆔 histórico_id: {historico_id}")
                             try:
-                                send_whatsapp_document(numero, pdf_content, filename, mensagem)
+                                message_id = send_whatsapp_document(numero, pdf_content, filename, mensagem)
                                 logging.warning(f"✅ PDF enviado com sucesso para {numero}")
+                                
+                                # Salvar log de mensagem enviada com message_id
+                                if message_id:
+                                    try:
+                                        from supabase_client import salvar_log_mensagem
+                                        salvar_log_mensagem({
+                                            "usuario_id": f"whatsapp:{numero}",
+                                            "telefone": numero,
+                                            "mensagem_recebida": None,
+                                            "mensagem_enviada": mensagem,
+                                            "tipo": "enviada",
+                                            "status": "sent",
+                                            "whatsapp_message_id": message_id
+                                        })
+                                        logging.info(f"💾 Log de mensagem salvo com message_id: {message_id}")
+                                    except Exception as e:
+                                        logging.warning(f"⚠️ Erro ao salvar log de mensagem enviada: {e}")
                                 
                                 # Atualizar status no histórico
                                 if historico_id:
@@ -626,19 +643,23 @@ async def mensagem(msg: Message):
                                         
                                         # Enviar PDF
                                         filename = f"boleto_{t}_{p}.pdf"
-                                        send_whatsapp_document(numero, pdf_content, filename, f"📄 Segunda via do boleto {t}/{p}")
+                                        message_id = send_whatsapp_document(numero, pdf_content, filename, f"📄 Segunda via do boleto {t}/{p}")
                                         
                                         # Salvar log de mensagem enviada
                                         try:
                                             from supabase_client import salvar_log_mensagem
-                                            salvar_log_mensagem({
+                                            dados_log = {
                                                 "usuario_id": f"whatsapp:{numero}",
                                                 "telefone": numero,
                                                 "mensagem_recebida": None,
                                                 "mensagem_enviada": f"PDF do boleto {t}/{p}",
                                                 "tipo": "enviada",
                                                 "status": "sent"
-                                            })
+                                            }
+                                            if message_id:
+                                                dados_log["whatsapp_message_id"] = message_id
+                                                logging.info(f"💾 Log de mensagem salvo com message_id: {message_id}")
+                                            salvar_log_mensagem(dados_log)
                                         except Exception as e:
                                             logging.warning(f"⚠️ Erro ao salvar log de mensagem enviada: {e}")
                                         
@@ -936,8 +957,26 @@ async def testar_cobranca():
                                 logging.warning(f"📤 Enviando PDF via WhatsApp para {numero}")
                                 logging.warning(f"🆔 histórico_id: {historico_id}")
                                 try:
-                                    send_whatsapp_document(numero, pdf_content, filename, mensagem)
+                                    message_id = send_whatsapp_document(numero, pdf_content, filename, mensagem)
                                     logging.warning(f"✅ PDF enviado com sucesso para {numero}")
+                                    
+                                    # Salvar log de mensagem enviada com message_id
+                                    if message_id:
+                                        try:
+                                            from supabase_client import salvar_log_mensagem
+                                            salvar_log_mensagem({
+                                                "usuario_id": f"whatsapp:{numero}",
+                                                "telefone": numero,
+                                                "mensagem_recebida": None,
+                                                "mensagem_enviada": mensagem,
+                                                "tipo": "enviada",
+                                                "status": "sent",
+                                                "whatsapp_message_id": message_id
+                                            })
+                                            logging.info(f"💾 Log de mensagem salvo com message_id: {message_id}")
+                                        except Exception as e:
+                                            logging.warning(f"⚠️ Erro ao salvar log de mensagem enviada: {e}")
+                                    
                                     # Atualizar status no histórico
                                     logging.warning(f"🔄 Atualizando status no Supabase...")
                                     try:
@@ -1296,10 +1335,11 @@ def send_whatsapp_document(to_number: str, file_content: bytes, filename: str, c
     file_content: conteúdo do arquivo em bytes
     filename: nome do arquivo
     caption: legenda opcional do documento
+    Retorna: message_id se sucesso, None se falha
     """
     if not (WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN):
         logging.error("❌ WHATSAPP_PHONE_NUMBER_ID ou WHATSAPP_TOKEN não configurados.")
-        return
+        return None
 
     # Primeiro, fazer upload do documento
     upload_url = f"https://graph.facebook.com/v20.0/{WHATSAPP_PHONE_NUMBER_ID}/media"
@@ -1347,8 +1387,26 @@ def send_whatsapp_document(to_number: str, file_content: bytes, filename: str, c
         logging.warning(f"📤 Enviando documento → {to_number}: {filename}")
         logging.warning(f"Resposta Meta: {message_resp.status_code} - {message_resp.text}")
         
+        # Verificar se houve erro na resposta
+        if message_resp.status_code != 200:
+            logging.error(f"❌ Erro ao enviar documento: Status {message_resp.status_code}")
+            return None
+        
+        # Extrair message_id da resposta para rastrear status
+        try:
+            resp_data = message_resp.json()
+            message_id = resp_data.get("messages", [{}])[0].get("id")
+            if message_id:
+                logging.info(f"🆔 Documento Message ID: {message_id}")
+                return message_id
+        except Exception as e:
+            logging.warning(f"⚠️ Erro ao extrair message_id do documento: {e}")
+        
+        return None
+        
     except Exception as e:
         logging.error(f"❌ Erro ao enviar documento via Cloud API: {e}")
+        return None
 
 @app.post("/webhook-whatsapp")
 async def webhook_whatsapp(request: Request):
