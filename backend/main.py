@@ -1486,20 +1486,26 @@ async def webhook_whatsapp(request: Request):
         
         # Envia resposta via Cloud API com botões ou lista
         logging.info(f"📤 Enviando resposta para {from_number}...")
-        send_whatsapp_cloud_message(from_number, texto_resposta, botoes, list_items)
+        message_id = send_whatsapp_cloud_message(from_number, texto_resposta, botoes, list_items)
         logging.info(f"✅ Resposta enviada com sucesso")
         
         # Salvar log de mensagem enviada no Supabase
         try:
             from supabase_client import salvar_log_mensagem
-            salvar_log_mensagem({
+            dados_log = {
                 "usuario_id": user_id,
                 "telefone": from_number,
                 "mensagem_recebida": text,
                 "mensagem_enviada": texto_resposta,
                 "tipo": "enviada",
                 "status": "sent"
-            })
+            }
+            # Salvar whatsapp_message_id se disponível
+            if message_id:
+                dados_log["whatsapp_message_id"] = message_id
+                logging.info(f"💾 Salvando message_id: {message_id}")
+            
+            salvar_log_mensagem(dados_log)
         except Exception as e:
             logging.warning(f"⚠️ Erro ao salvar log de mensagem enviada: {e}")
         
