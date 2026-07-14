@@ -1176,6 +1176,24 @@ async def carregar_configuracao_cobranca_api():
     # Configuração padrão
     return {"ativo": False, "horario_execucao": "09:00", "lembretes": []}
 
+
+@app.post("/invalidar-cache")
+async def invalidar_cache_api(cache_key: str = "lista_clientes"):
+    """
+    Invalida um cache específico manualmente
+    Útil quando dados são atualizados no Sienge e precisam ser recarregados
+    """
+    try:
+        from sienge.sienge_cobranca import invalidar_cache
+        resultado = invalidar_cache(cache_key)
+        if resultado:
+            return {"status": "success", "message": f"Cache {cache_key} invalidado com sucesso"}
+        else:
+            return {"status": "error", "message": f"Cache {cache_key} não existe ou erro ao invalidar"}
+    except Exception as e:
+        logging.error(f"❌ Erro ao invalidar cache: {e}")
+        return {"status": "error", "message": str(e)}
+
 # ============================================================
 # 🌐 WEBHOOK WHATSAPP CLOUD API (VERIFICAÇÃO)
 # ============================================================

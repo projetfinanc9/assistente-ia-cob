@@ -48,9 +48,22 @@ def salvar_cache(cache_key: str, data: Dict):
         }
         with open(cache_file, 'w', encoding='utf-8') as f:
             json.dump(cache_data, f, indent=2, ensure_ascii=False)
-        logging.warning(f"💾 Cache {cache_key} salvo")
-    except Exception as e:
-        logging.warning(f"⚠️ Erro ao salvar cache {cache_key}: {e}")
+
+def invalidar_cache(cache_key: str):
+    """Invalida um cache específico (deleta o arquivo)"""
+    cache_file = CACHE_DIR / f"{cache_key}.json"
+    
+    if cache_file.exists():
+        try:
+            cache_file.unlink()
+            logging.warning(f"🗑️ Cache {cache_key} invalidado com sucesso")
+            return True
+        except Exception as e:
+            logging.warning(f"⚠️ Erro ao invalidar cache {cache_key}: {e}")
+            return False
+    else:
+        logging.warning(f"⚠️ Cache {cache_key} não existe")
+        return False
 
 logging.warning("🔔 Rodando módulo sienge_cobranca.py (sistema de cobrança automática com suporte a CNPJ)")
 
@@ -350,7 +363,8 @@ def verificar_boletos_vencendo() -> List[Dict]:
         logging.warning(f"📅 Lembrete {i+1}: {dias} dias {tipo} do vencimento")
     
     # Buscar lista de clientes se cache não existir (para obter telefones)
-    cache_clientes = obter_dados_cache("lista_clientes", validade_horas=24)
+    # TTL reduzido para 1 hora para evitar dados desatualizados
+    cache_clientes = obter_dados_cache("lista_clientes", validade_horas=1)
     if not cache_clientes:
         logging.warning("📊 Cache de clientes não existe, buscando da API...")
         url = f"{BASE_URL}/customers"
