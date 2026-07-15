@@ -1581,10 +1581,12 @@ def send_whatsapp_cloud_message(to_number: str, body: str, buttons: list = None,
             if message_id:
                 logging.info(f"🆔 Message ID: {message_id}")
                 return message_id
+            else:
+                logging.warning(f"⚠️ message_id não encontrado na resposta")
+                return None
         except Exception as e:
             logging.warning(f"⚠️ Erro ao extrair message_id: {e}")
-        
-        return True
+            return None
     except Exception as e:
         logging.error(f"❌ Erro ao enviar mensagem via Cloud API: {e}")
         return False
