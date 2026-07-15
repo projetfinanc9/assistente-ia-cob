@@ -1608,11 +1608,13 @@ def send_whatsapp_document(to_number: str, file_content: bytes, filename: str, c
     caption: legenda opcional do documento
     Retorna: message_id se sucesso, None se falha
     """
+    import time
+    
     if not (WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN):
         logging.error("❌ WHATSAPP_PHONE_NUMBER_ID ou WHATSAPP_TOKEN não configurados.")
         return None
 
-    # Primeiro, fazer upload do documento
+    # Primeiro, fazer upload do documento com retry para 429
     upload_url = f"https://graph.facebook.com/v20.0/{WHATSAPP_PHONE_NUMBER_ID}/media"
     upload_headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
@@ -1623,61 +1625,81 @@ def send_whatsapp_document(to_number: str, file_content: bytes, filename: str, c
         "messaging_product": (None, "whatsapp")
     }
     
-    try:
-        upload_resp = requests.post(upload_url, headers=upload_headers, files=files)
-        upload_data = upload_resp.json()
-        
-        if upload_resp.status_code != 200:
-            logging.error(f"❌ Erro ao upload documento: {upload_resp.status_code} - {upload_data}")
-            return
-        
-        media_id = upload_data.get("id")
-        logging.warning(f"✅ Documento uploadado: {media_id}")
-        
-        # Enviar documento usando media_id
-        message_url = f"https://graph.facebook.com/v20.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
-        message_headers = {
-            "Authorization": f"Bearer {WHATSAPP_TOKEN}",
-            "Content-Type": "application/json",
-        }
-        
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": to_number,
-            "type": "document",
-            "document": {
-                "id": media_id,
-                "filename": filename,
-            }
-        }
-        
-        if caption:
-            payload["document"]["caption"] = caption
-        
-        message_resp = requests.post(message_url, headers=message_headers, json=payload)
-        logging.warning(f"📤 Enviando documento → {to_number}: {filename}")
-        logging.warning(f"Resposta Meta: {message_resp.status_code} - {message_resp.text}")
-        
-        # Verificar se houve erro na resposta
-        if message_resp.status_code != 200:
-            logging.error(f"❌ Erro ao enviar documento: Status {message_resp.status_code}")
-            return None
-        
-        # Extrair message_id da resposta para rastrear status
+    max_retries = 5
+    
+    for tentativa in range(1, max_retries + 1):
         try:
-            resp_data = message_resp.json()
-            message_id = resp_data.get("messages", [{}])[0].get("id")
-            if message_id:
-                logging.info(f"🆔 Documento Message ID: {message_id}")
-                return message_id
+            upload_resp = requests.post(upload_url, headers=upload_headers, files=files)
+            upload_data = upload_resp.json()
+            
+            if upload_resp.status_code == 200:
+                break
+            elif upload_resp.status_code == 429:
+                wait_time = 2 ** tentativa  # Backoff exponencial: 2, 4, 8, 16, 32 segundos
+                logging.warning(f"⚠️ Erro 429 ao upload documento. Aguardando {wait_time}s antes de tentar novamente...")
+                time.sleep(wait_time)
+                continue
+            else:
+                logging.error(f"❌ Erro ao upload documento: {upload_resp.status_code} - {upload_data}")
+                return None
         except Exception as e:
-            logging.warning(f"⚠️ Erro ao extrair message_id do documento: {e}")
-        
-        return None
-        
+            logging.error(f"❌ Erro ao fazer upload: {e}")
+            return None
+    
+    media_id = upload_data.get("id")
+    logging.warning(f"✅ Documento uploadado: {media_id}")
+    
+    # Enviar documento usando media_id com retry para 429
+    message_url = f"https://graph.facebook.com/v20.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
+    message_headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to_number,
+        "type": "document",
+        "document": {
+            "id": media_id,
+            "filename": filename,
+        }
+    }
+    
+    if caption:
+        payload["document"]["caption"] = caption
+    
+    for tentativa in range(1, max_retries + 1):
+        try:
+            message_resp = requests.post(message_url, headers=message_headers, json=payload)
+            logging.warning(f"📤 Enviando documento → {to_number}: {filename}")
+            logging.warning(f"Resposta Meta: {message_resp.status_code} - {message_resp.text}")
+            
+            if message_resp.status_code == 200:
+                break
+            elif message_resp.status_code == 429:
+                wait_time = 2 ** tentativa  # Backoff exponencial: 2, 4, 8, 16, 32 segundos
+                logging.warning(f"⚠️ Erro 429 ao enviar mensagem. Aguardando {wait_time}s antes de tentar novamente...")
+                time.sleep(wait_time)
+                continue
+            else:
+                logging.error(f"❌ Erro ao enviar documento: Status {message_resp.status_code}")
+                return None
+        except Exception as e:
+            logging.error(f"❌ Erro ao enviar mensagem: {e}")
+            return None
+    
+    # Extrair message_id da resposta para rastrear status
+    try:
+        resp_data = message_resp.json()
+        message_id = resp_data.get("messages", [{}])[0].get("id")
+        if message_id:
+            logging.info(f"🆔 Documento Message ID: {message_id}")
+            return message_id
     except Exception as e:
-        logging.error(f"❌ Erro ao enviar documento via Cloud API: {e}")
-        return None
+        logging.warning(f"⚠️ Erro ao extrair message_id do documento: {e}")
+    
+    return None
 
 @app.post("/webhook-whatsapp")
 async def webhook_whatsapp(request: Request):
