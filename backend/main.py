@@ -678,7 +678,7 @@ async def mensagem(msg: Message):
                 # Verificar aptidão e obter URL do PDF em uma requisição
                 apta, pdf_url = tem_boleto_apto(t, p)
                 if not apta:
-                    return {"status": "error", "message": "Boleto não disponível para download"}
+                    return {"text": "❌ Boleto não disponível para download", "buttons": menu_inicial}
                 pdf_content = baixar_pdf_boleto(t, p, pdf_url)
                 
                 if pdf_content:
@@ -730,6 +730,11 @@ async def mensagem(msg: Message):
                                             "text": f"✅ *PDF do boleto {t}/{p} enviado com sucesso!*",
                                             "buttons": menu_inicial
                                         }
+                    
+                    # Se chegou aqui, não encontrou telefone ou falhou envio
+                    return {"text": "❌ Não foi possível enviar o PDF. Tente novamente.", "buttons": menu_inicial}
+                else:
+                    return {"text": "❌ Erro ao baixar PDF do boleto", "buttons": menu_inicial}
             except Exception as e:
                 logging.warning(f"⚠️ Erro ao baixar/enviar PDF: {e}")
                 return {"text": f"❌ Erro ao gerar boleto: {e}", "buttons": menu_inicial}
