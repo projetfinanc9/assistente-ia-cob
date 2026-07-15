@@ -671,30 +671,37 @@ async def mensagem(msg: Message):
 
         if acao == "link_boleto":
             t, p = parametros.get("titulo_id"), parametros.get("parcela_id")
+            logging.warning(f"🔍 Processando link_boleto: titulo_id={t}, parcela_id={p}")
             
             # Baixar PDF do boleto e enviar como anexo
             try:
                 from sienge.sienge_cobranca import baixar_pdf_boleto, tem_boleto_apto
                 # Verificar aptidão e obter URL do PDF em uma requisição
                 apta, pdf_url = tem_boleto_apto(t, p)
+                logging.warning(f"🔍 Aptidão: {apta}, pdf_url: {pdf_url}")
                 if not apta:
                     return {"text": "❌ Boleto não disponível para download", "buttons": menu_inicial}
                 pdf_content = baixar_pdf_boleto(t, p, pdf_url)
+                logging.warning(f"🔍 PDF baixado: {pdf_content is not None}, tamanho: {len(pdf_content) if pdf_content else 0}")
                 
                 if pdf_content:
                     # Enviar PDF como documento via WhatsApp
                     # Extrair número do usuário do contexto
                     ctx = usuarios_contexto.get(msg.user, {})
                     documento = ctx.get("documento", "")
+                    logging.warning(f"🔍 Documento do contexto: {documento}")
                     
                     # Buscar cliente para obter telefone
                     if documento:
                         resultado = buscar_boletos_por_documento(documento)
+                        logging.warning(f"🔍 Resultado buscar_boletos: {len(resultado.get('boletos', []))} boletos")
                         if "boletos" in resultado and resultado["boletos"]:
                             # Encontrar o boleto específico para obter telefone
                             for boleto in resultado["boletos"]:
+                                logging.warning(f"🔍 Verificando boleto: {boleto.get('titulo_id')}/{boleto.get('parcela_id')}")
                                 if boleto["titulo_id"] == t and boleto["parcela_id"] == p:
                                     telefone = boleto.get("cliente_telefone")
+                                    logging.warning(f"🔍 Telefone encontrado: {telefone}")
                                     if telefone:
                                         # Normalizar telefone
                                         numero = re.sub(r"\D", "", telefone)
@@ -704,9 +711,11 @@ async def mensagem(msg: Message):
                                             ddd = numero[:4]
                                             numero = ddd + "9" + numero[4:]
                                         
+                                        logging.warning(f"🔍 Enviando PDF para: {numero}")
                                         # Enviar PDF
                                         filename = f"boleto_{t}_{p}.pdf"
                                         message_id = send_whatsapp_document(numero, pdf_content, filename, f"📄 Segunda via do boleto {t}/{p}")
+                                        logging.warning(f"🔍 message_id retornado: {message_id}")
                                         
                                         # Salvar log de mensagem enviada
                                         try:
@@ -726,17 +735,22 @@ async def mensagem(msg: Message):
                                         except Exception as e:
                                             logging.warning(f"⚠️ Erro ao salvar log de mensagem enviada: {e}")
                                         
+                                        logging.warning(f"✅ Retornando sucesso")
                                         return {
                                             "text": f"✅ *PDF do boleto {t}/{p} enviado com sucesso!*",
                                             "buttons": menu_inicial
                                         }
                     
                     # Se chegou aqui, não encontrou telefone ou falhou envio
+                    logging.warning(f"⚠️ Não encontrou telefone ou falhou envio")
                     return {"text": "❌ Não foi possível enviar o PDF. Tente novamente.", "buttons": menu_inicial}
                 else:
+                    logging.warning(f"⚠️ PDF content vazio")
                     return {"text": "❌ Erro ao baixar PDF do boleto", "buttons": menu_inicial}
             except Exception as e:
                 logging.warning(f"⚠️ Erro ao baixar/enviar PDF: {e}")
+                import traceback
+                logging.warning(traceback.format_exc())
                 return {"text": f"❌ Erro ao gerar boleto: {e}", "buttons": menu_inicial}
 
         # ========================================================
