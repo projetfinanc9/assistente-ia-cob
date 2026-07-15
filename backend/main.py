@@ -722,9 +722,7 @@ async def mensagem(msg: Message):
                                         }
             except Exception as e:
                 logging.warning(f"⚠️ Erro ao baixar/enviar PDF: {e}")
-            
-            # Fallback: enviar link se falhar o PDF
-            return {"text": gerar_link_boleto(t, p), "buttons": menu_inicial}
+                return {"text": f"❌ Erro ao gerar boleto: {e}", "buttons": menu_inicial}
 
         # ========================================================
         # 🔔 COBRANÇA
