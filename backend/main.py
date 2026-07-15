@@ -597,11 +597,8 @@ async def mensagem(msg: Message):
         # 💳 CONFIRMAR BOLETOS
         # ========================================================
         if texto.lower() == "confirmar" or acao == "confirmar":
-            logging.warning(f"🔍 Tentando confirmar para user: {msg.user}")
-            logging.warning(f"🔍 Contexto atual: {usuarios_contexto}")
             ctx = usuarios_contexto.get(msg.user, {})
             documento = ctx.get("documento")
-            logging.warning(f"🔍 Documento encontrado no contexto: {documento}")
             if not documento:
                 return {"text": "⚠️ Nenhum documento armazenado. Digite novamente.", "buttons": menu_inicial}
 
