@@ -685,85 +685,44 @@ async def mensagem(msg: Message):
                 logging.warning(f"🔍 PDF baixado: {pdf_content is not None}, tamanho: {len(pdf_content) if pdf_content else 0}")
                 
                 if pdf_content:
-                    # Enviar PDF como documento via WhatsApp
-                    # Extrair número do usuário do contexto
+                    # Extrair número do usuário do contexto (quem está enviando a mensagem)
                     ctx = usuarios_contexto.get(msg.user, {})
                     documento = ctx.get("documento", "")
                     logging.warning(f"🔍 Documento do contexto: {documento}")
                     
-                    # Buscar cliente para obter telefone (usar cache como cobrança automática)
-                    if documento:
-                        resultado = buscar_boletos_por_documento(documento)
-                        logging.warning(f"🔍 Resultado buscar_boletos: {len(resultado.get('boletos', []))} boletos")
-                        if "boletos" in resultado and resultado["boletos"]:
-                            # Encontrar o boleto específico para obter cliente_id
-                            cliente_id = None
-                            for boleto in resultado["boletos"]:
-                                logging.warning(f"🔍 Verificando boleto: {boleto.get('titulo_id')}/{boleto.get('parcela_id')}")
-                                if boleto["titulo_id"] == t and boleto["parcela_id"] == p:
-                                    cliente_id = boleto.get("cliente_id")
-                                    logging.warning(f"🔍 Cliente ID encontrado: {cliente_id}")
-                                    break
-                            
-                            if cliente_id:
-                                # Buscar telefone do cache de clientes (igual cobrança automática)
-                                from sienge.sienge_cobranca import obter_dados_cache
-                                cache_clientes = obter_dados_cache("lista_clientes", validade_horas=24)
-                                if cache_clientes:
-                                    for cliente in cache_clientes:
-                                        if cliente.get("id") == cliente_id:
-                                            phones = cliente.get("phones", [])
-                                            logging.warning(f"🔍 Phones do cliente: {phones}")
-                                            if phones:
-                                                for phone in phones:
-                                                    if phone.get("main"):
-                                                        telefone = phone.get("number")
-                                                        break
-                                                if not telefone:
-                                                    telefone = phones[0].get("number")
-                                            logging.warning(f"🔍 Telefone do cache: {telefone}")
-                                            if telefone:
-                                                # Normalizar telefone
-                                                numero = re.sub(r"\D", "", telefone)
-                                                if not numero.startswith("55"):
-                                                    numero = "55" + numero
-                                                if len(numero) == 12:
-                                                    ddd = numero[:4]
-                                                    numero = ddd + "9" + numero[4:]
-                                                
-                                                logging.warning(f"🔍 Enviando PDF para: {numero}")
-                                                # Enviar PDF
-                                                filename = f"boleto_{t}_{p}.pdf"
-                                                message_id = send_whatsapp_document(numero, pdf_content, filename, f"📄 Segunda via do boleto {t}/{p}")
-                                                logging.warning(f"🔍 message_id retornado: {message_id}")
-                                                
-                                                # Salvar log de mensagem enviada
-                                                try:
-                                                    from supabase_client import salvar_log_mensagem
-                                                    dados_log = {
-                                                        "usuario_id": f"whatsapp:{numero}",
-                                                        "telefone": numero,
-                                                        "mensagem_recebida": None,
-                                                        "mensagem_enviada": f"PDF do boleto {t}/{p}",
-                                                        "tipo": "enviada",
-                                                        "status": "sent"
-                                                    }
-                                                    if message_id:
-                                                        dados_log["whatsapp_message_id"] = message_id
-                                                        logging.info(f"💾 Log de mensagem salvo com message_id: {message_id}")
-                                                    salvar_log_mensagem(dados_log)
-                                                except Exception as e:
-                                                    logging.warning(f"⚠️ Erro ao salvar log de mensagem enviada: {e}")
-                                                
-                                                logging.warning(f"✅ Retornando sucesso")
-                                                return {
-                                                    "text": f"✅ *PDF do boleto {t}/{p} enviado com sucesso!*",
-                                                    "buttons": menu_inicial
-                                                }
+                    # Usar o número do WhatsApp do usuário que está enviando a mensagem
+                    # msg.user está no formato "whatsapp:559193808761"
+                    numero = msg.user.replace("whatsapp:", "")
+                    logging.warning(f"🔍 Usando número do usuário: {numero}")
                     
-                    # Se chegou aqui, não encontrou telefone ou falhou envio
-                    logging.warning(f"⚠️ Não encontrou telefone ou falhou envio")
-                    return {"text": "❌ Não foi possível enviar o PDF. Tente novamente.", "buttons": menu_inicial}
+                    # Enviar PDF
+                    filename = f"boleto_{t}_{p}.pdf"
+                    message_id = send_whatsapp_document(numero, pdf_content, filename, f"📄 Segunda via do boleto {t}/{p}")
+                    logging.warning(f"🔍 message_id retornado: {message_id}")
+                    
+                    # Salvar log de mensagem enviada
+                    try:
+                        from supabase_client import salvar_log_mensagem
+                        dados_log = {
+                            "usuario_id": f"whatsapp:{numero}",
+                            "telefone": numero,
+                            "mensagem_recebida": None,
+                            "mensagem_enviada": f"PDF do boleto {t}/{p}",
+                            "tipo": "enviada",
+                            "status": "sent"
+                        }
+                        if message_id:
+                            dados_log["whatsapp_message_id"] = message_id
+                            logging.info(f"💾 Log de mensagem salvo com message_id: {message_id}")
+                        salvar_log_mensagem(dados_log)
+                    except Exception as e:
+                        logging.warning(f"⚠️ Erro ao salvar log de mensagem enviada: {e}")
+                    
+                    logging.warning(f"✅ Retornando sucesso")
+                    return {
+                        "text": f"✅ *PDF do boleto {t}/{p} enviado com sucesso!*",
+                        "buttons": menu_inicial
+                    }
                 else:
                     logging.warning(f"⚠️ PDF content vazio")
                     return {"text": "❌ Erro ao baixar PDF do boleto", "buttons": menu_inicial}
