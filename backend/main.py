@@ -498,14 +498,25 @@ usuarios_contexto = {}
 # ============================================================
 def entender_intencao(texto: str):
     t = (texto or "").strip().lower()
+    logging.warning(f"🔍 Analisando intenção para texto: '{t}'")
 
     if t in ["oi", "ola", "olá", "bom dia", "boa tarde", "boa noite"]:
         return {"acao": "saudacao"}
+    
+    # Verificar se é comando de boleto com formato "boleto X Y"
+    if re.match(r"^boleto\s+\d+\s+\d+$", t):
+        nums = re.findall(r"\d+", t)
+        if len(nums) >= 2:
+            logging.warning(f"✅ Intenção reconhecida: link_boleto com titulo_id={nums[-2]}, parcela_id={nums[-1]}")
+            return {"acao": "link_boleto", "parametros": {"titulo_id": int(nums[-2]), "parcela_id": int(nums[-1])}}
+    
     if "segunda via" in t or "boleto" in t:
         nums = re.findall(r"\d+", t)
         if len(nums) >= 2:
+            logging.warning(f"✅ Intenção reconhecida: link_boleto com titulo_id={nums[-2]}, parcela_id={nums[-1]}")
             return {"acao": "link_boleto", "parametros": {"titulo_id": int(nums[-2]), "parcela_id": int(nums[-1])}}
         return {"acao": "buscar_boletos_cpf"}
+    
     if re.search(r"\d{11}|\d{3}\.\d{3}\.\d{3}-\d{2}", t):
         return {"acao": "cpf_digitado", "parametros": {"cpf": t}}
     if re.search(r"\d{14}|\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}", t):
@@ -514,6 +525,8 @@ def entender_intencao(texto: str):
         return {"acao": "confirmar"}
     if "cobrança" in t or "cobranca" in t or "vencendo" in t:
         return {"acao": "relatorio_cobrancas"}
+    
+    logging.warning(f"⚠️ Nenhuma intenção reconhecida para: '{t}'")
     return {"acao": None}
 
 # ============================================================
