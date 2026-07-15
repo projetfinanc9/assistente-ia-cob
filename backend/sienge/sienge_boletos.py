@@ -236,6 +236,7 @@ def buscar_boletos_por_documento(documento: str):
                 "descricao": desc,
                 "valor": p.get("balanceDue") or valor,
                 "vencimento": p.get("dueDate") or emissao,
+                "cliente_id": cid,
             })
 
         # 🔍 Checagem extra para parcelas conhecidas (Sienge às vezes omite)
@@ -250,6 +251,7 @@ def buscar_boletos_por_documento(documento: str):
                     "descricao": desc,
                     "valor": valor,
                     "vencimento": emissao,
+                    "cliente_id": cid,
                 })
 
     if not lista:
