@@ -1801,8 +1801,15 @@ async def webhook_whatsapp(request: Request):
 
         user_id = f"whatsapp:{from_number}"
         
-        # Processar a mensagem
-        texto_resposta = processar_mensagem(user_id, text, from_number)
+        # Processar a mensagem usando o endpoint de mensagem existente
+        from pydantic import BaseModel
+        class MessageWrapper(BaseModel):
+            user: str
+            text: str
+        
+        msg_wrapper = MessageWrapper(user=user_id, text=text)
+        resposta_construia = await mensagem(msg_wrapper)
+        texto_resposta = resposta_construia.get("text", "Constru.IA: não consegui gerar resposta.")
         
         # Gerar botões e lista de itens se necessário
         botoes = None
