@@ -185,6 +185,7 @@ def tem_boleto_apto(titulo_id: int, installment_id: int) -> tuple[bool, str | No
     Retorna (apta, urlReport).
     Usa cache para reduzir requisições ao Sienge.
     """
+    import time
     cache_key = f"boleto_apto_{titulo_id}_{installment_id}"
     
     # Tentar obter do cache (24h - aptidão não muda frequentemente)
@@ -195,28 +196,38 @@ def tem_boleto_apto(titulo_id: int, installment_id: int) -> tuple[bool, str | No
     
     url = f"{BASE_URL}/payment-slip-notification"
     params = {"billReceivableId": titulo_id, "installmentId": installment_id}
+    max_retries = 3
     
-    r = requests.get(url, headers=json_headers, params=params, timeout=30)
+    for tentativa in range(1, max_retries + 1):
+        r = requests.get(url, headers=json_headers, params=params, timeout=30)
+        
+        if r.status_code == 200:
+            results = r.json().get("results", [])
+            if results:
+                url_report = results[0].get("urlReport")
+                logging.warning(f"✅ Parcela {installment_id} apta: urlReport={url_report}")
+                salvar_cache(cache_key, (True, url_report))
+                return True, url_report
+            salvar_cache(cache_key, (False, None))
+            return False, None
+        
+        if r.status_code == 422:
+            # Parcela não apta: sem cobrança, nosso número zerado ou saldo zerado
+            error_msg = r.json().get('clientMessage', 'Erro desconhecido')
+            logging.warning(f"⏭️ Parcela {installment_id} não apta: {error_msg}")
+            salvar_cache(cache_key, (False, None))
+            return False, None
+        
+        if r.status_code == 429:
+            wait_time = 2 * tentativa
+            logging.warning(f"⚠️ Erro 429 (Too Many Requests) ao checar parcela {installment_id}. Aguardando {wait_time}s antes de tentar novamente...")
+            time.sleep(wait_time)
+            continue
+        
+        # outros erros (401, 500, etc) — loga separado pra não confundir com "não apta"
+        logging.warning(f"⚠️ Erro inesperado ({r.status_code}) ao checar parcela {installment_id} do título {titulo_id}")
+        break
     
-    if r.status_code == 200:
-        results = r.json().get("results", [])
-        if results:
-            url_report = results[0].get("urlReport")
-            logging.warning(f"✅ Parcela {installment_id} apta: urlReport={url_report}")
-            salvar_cache(cache_key, (True, url_report))
-            return True, url_report
-        salvar_cache(cache_key, (False, None))
-        return False, None
-    
-    if r.status_code == 422:
-        # Parcela não apta: sem cobrança, nosso número zerado ou saldo zerado
-        error_msg = r.json().get('clientMessage', 'Erro desconhecido')
-        logging.warning(f"⏭️ Parcela {installment_id} não apta: {error_msg}")
-        salvar_cache(cache_key, (False, None))
-        return False, None
-    
-    # outros erros (401, 500, etc) — loga separado pra não confundir com "não apta"
-    logging.warning(f"⚠️ Erro inesperado ({r.status_code}) ao checar parcela {installment_id} do título {titulo_id}")
     salvar_cache(cache_key, (False, None))
     return False, None
 
