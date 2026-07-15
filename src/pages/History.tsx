@@ -90,7 +90,7 @@ const History = () => {
       return;
     }
     
-    console.log("Iniciando atualização do cliente - ID:", selectedHistory.cliente_id, "Nome:", selectedHistory.cliente);
+    console.log("Iniciando atualização do cliente - ID:", selectedHistory.cliente_id, "Nome:", selectedHistory.cliente, "Histórico:", selectedHistory.id);
     setUpdating(true);
     try {
       let url = `${API_URL}/atualizar-cliente-sienge`;
@@ -100,6 +100,7 @@ const History = () => {
       } else {
         params.append("cliente_nome", selectedHistory.cliente);
       }
+      params.append("historico_id", selectedHistory.id);
       url += `?${params.toString()}`;
       
       console.log("URL da requisição:", url);

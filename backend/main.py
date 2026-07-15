@@ -45,7 +45,7 @@ async def executar_cobranca_agendada():
             
             # Salvar registro no histórico antes de tentar enviar
             try:
-                historico_salvo = salvar_historico_cobranca({
+                dados_historico = {
                     "cliente_id": boleto.get("cliente_id"),
                     "cliente_nome": boleto.get("cliente_nome"),
                     "cliente_telefone": boleto.get("cliente_telefone"),
@@ -58,7 +58,10 @@ async def executar_cobranca_agendada():
                     "mensagem_enviada": mensagem,
                     "status": "pendente",
                     "tipo_envio": "pdf" if boleto.get("envio_pdf") else "texto"
-                })
+                }
+                logging.warning(f"💾 Salvando histórico com cliente_id: {boleto.get('cliente_id')}")
+                logging.warning(f"💾 Dados completos: {dados_historico}")
+                historico_salvo = salvar_historico_cobranca(dados_historico)
                 historico_id = historico_salvo.get("id") if isinstance(historico_salvo, dict) else historico_salvo
                 logging.warning(f"💾 Histórico salvo no Supabase: {historico_id}")
             except Exception as e:
@@ -123,9 +126,10 @@ async def executar_cobranca_agendada():
                         from sienge.sienge_cobranca import baixar_pdf_boleto
                         titulo_id = boleto.get("titulo_id")
                         parcela_id = boleto.get("parcela_id")
+                        pdf_url = boleto.get("pdf_url")  # URL da verificação de aptidão
                         
-                        # Baixar PDF do boleto
-                        pdf_content = baixar_pdf_boleto(titulo_id, parcela_id)
+                        # Baixar PDF do boleto (usando URL da verificação para evitar requisição duplicada)
+                        pdf_content = baixar_pdf_boleto(titulo_id, parcela_id, pdf_url)
                         
                         if pdf_content:
                             # Enviar PDF como documento
@@ -653,8 +657,12 @@ async def mensagem(msg: Message):
             
             # Baixar PDF do boleto e enviar como anexo
             try:
-                from sienge.sienge_cobranca import baixar_pdf_boleto
-                pdf_content = baixar_pdf_boleto(t, p)
+                from sienge.sienge_cobranca import baixar_pdf_boleto, tem_boleto_apto
+                # Verificar aptidão e obter URL do PDF em uma requisição
+                apta, pdf_url = tem_boleto_apto(t, p)
+                if not apta:
+                    return {"status": "error", "message": "Boleto não disponível para download"}
+                pdf_content = baixar_pdf_boleto(t, p, pdf_url)
                 
                 if pdf_content:
                     # Enviar PDF como documento via WhatsApp
@@ -987,9 +995,10 @@ async def testar_cobranca():
                             from sienge.sienge_cobranca import baixar_pdf_boleto
                             titulo_id = boleto.get("titulo_id")
                             parcela_id = boleto.get("parcela_id")
+                            pdf_url = boleto.get("pdf_url")  # URL da verificação de aptidão
                             
-                            # Baixar PDF do boleto
-                            pdf_content = baixar_pdf_boleto(titulo_id, parcela_id)
+                            # Baixar PDF do boleto (usando URL da verificação para evitar requisição duplicada)
+                            pdf_content = baixar_pdf_boleto(titulo_id, parcela_id, pdf_url)
                             
                             if pdf_content:
                                 # Enviar PDF como documento
@@ -1232,16 +1241,18 @@ async def invalidar_cache_api(cache_key: str = "lista_clientes"):
 
 
 @app.post("/atualizar-cliente-sienge")
-async def atualizar_cliente_sienge(cliente_id: str = None, cliente_nome: str = None):
+async def atualizar_cliente_sienge(cliente_id: str = None, cliente_nome: str = None, historico_id: str = None):
     """
     Atualiza dados de um cliente específico do Sienge
     Invalida o cache e busca dados atualizados
     Aceita cliente_id ou cliente_nome como parâmetro
+    Se historico_id for fornecido, atualiza o registro no Supabase
     """
-    logging.warning(f"🔄 Iniciando atualização do cliente - ID: {cliente_id}, Nome: {cliente_nome}")
+    logging.warning(f"🔄 Iniciando atualização do cliente - ID: {cliente_id}, Nome: {cliente_nome}, Histórico: {historico_id}")
     try:
         from sienge.sienge_cobranca import invalidar_cache
         from sienge.sienge_config import BASE_URL, json_headers
+        from supabase_client import atualizar_historico_cobranca
         import requests
         
         # Invalidar cache de clientes
@@ -1281,10 +1292,34 @@ async def atualizar_cliente_sienge(cliente_id: str = None, cliente_nome: str = N
                         cliente_data = r_id.json()
                         logging.warning(f"✅ Dados do cliente atualizados por ID: {cliente_data}")
                 
+                # Extrair telefone dos dados do cliente
+                telefone = None
+                phones = cliente_data.get("phones", [])
+                if phones:
+                    for phone in phones:
+                        if phone.get("main"):
+                            telefone = phone.get("number")
+                            break
+                    if not telefone:
+                        telefone = phones[0].get("number")
+                
+                logging.warning(f"📱 Telefone extraído: {telefone}")
+                
+                # Se historico_id foi fornecido, atualizar o registro no Supabase
+                if historico_id:
+                    logging.warning(f"💾 Atualizando histórico {historico_id} no Supabase...")
+                    dados_atualizacao = {
+                        "cliente_id": cliente_data.get("id"),
+                        "cliente_telefone": telefone
+                    }
+                    atualizar_historico_cobranca(historico_id, dados_atualizacao)
+                    logging.warning(f"✅ Histórico atualizado no Supabase")
+                
                 return {
                     "status": "success",
                     "message": "Dados do cliente atualizados com sucesso",
-                    "cliente": cliente_data
+                    "cliente": cliente_data,
+                    "telefone": telefone
                 }
             else:
                 return {"status": "error", "message": "Cliente não encontrado"}
@@ -1303,9 +1338,10 @@ async def atualizar_cliente_sienge(cliente_id: str = None, cliente_nome: str = N
 async def reenviar_cobranca(historico_id: str):
     """
     Reenvia cobrança para um cliente específico baseado no histórico
+    Atualiza o status do histórico existente em vez de criar um novo
     """
     try:
-        from supabase_client import buscar_historico_por_id
+        from supabase_client import buscar_historico_por_id, atualizar_historico_cobranca, salvar_log_mensagem
         from datetime import datetime
         
         # Buscar histórico da cobrança
@@ -1349,35 +1385,29 @@ async def reenviar_cobranca(historico_id: str):
         # Enviar via WhatsApp
         if WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN:
             try:
+                message_id = None
                 if boleto.get("envio_pdf"):
                     from sienge.sienge_cobranca import baixar_pdf_boleto
-                    pdf_content = baixar_pdf_boleto(boleto["titulo_id"], boleto["parcela_id"])
+                    pdf_url = boleto.get("pdf_url")  # URL da verificação de aptidão
+                    pdf_content = baixar_pdf_boleto(boleto["titulo_id"], boleto["parcela_id"], pdf_url)
                     
                     if pdf_content:
                         filename = f"boleto_{boleto['titulo_id']}_{boleto['parcela_id']}.pdf"
                         message_id = send_whatsapp_document(numero, pdf_content, filename, mensagem)
                     else:
-                        message_id = send_whatsapp_cloud_message(numero, mensagem)
+                        # Se não conseguir baixar PDF, não enviar (mesma lógica da cobrança automática)
+                        logging.warning(f"⚠️ Não foi possível baixar o PDF para título {boleto['titulo_id']}, parcela {boleto['parcela_id']}")
+                        return {"status": "error", "message": "Não foi possível baixar o PDF do boleto. A cobrança não pode ser reenviada."}
                 else:
                     message_id = send_whatsapp_cloud_message(numero, mensagem)
                 
-                # Salvar novo histórico
-                from supabase_client import salvar_historico_cobranca, salvar_log_mensagem
-                novo_historico = salvar_historico_cobranca({
-                    "cliente_id": boleto["cliente_id"],
-                    "cliente_nome": boleto["cliente_nome"],
-                    "cliente_telefone": boleto["cliente_telefone"],
-                    "titulo_id": boleto["titulo_id"],
-                    "parcela_id": boleto["parcela_id"],
-                    "vencimento": boleto["vencimento"],
-                    "valor": boleto["valor"],
-                    "dias_antes": boleto["dias_antes"],
-                    "mensagem_template": boleto["mensagem_template"],
-                    "mensagem_enviada": mensagem,
+                # Atualizar histórico existente
+                logging.warning(f"💾 Atualizando histórico {historico_id} no Supabase...")
+                atualizar_historico_cobranca(historico_id, {
                     "status": "enviado",
-                    "tipo_envio": "pdf" if boleto.get("envio_pdf") else "texto",
                     "enviado_em": datetime.now().isoformat()
                 })
+                logging.warning(f"✅ Histórico atualizado no Supabase")
                 
                 if message_id:
                     salvar_log_mensagem({
@@ -1393,7 +1423,7 @@ async def reenviar_cobranca(historico_id: str):
                 return {
                     "status": "success",
                     "message": "Cobrança reenviada com sucesso",
-                    "historico_id": novo_historico.get("id") if isinstance(novo_historico, dict) else novo_historico
+                    "historico_id": historico_id
                 }
             except Exception as e:
                 logging.error(f"❌ Erro ao reenviar cobrança: {e}")

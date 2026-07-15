@@ -183,7 +183,16 @@ def tem_boleto_apto(titulo_id: int, installment_id: int) -> tuple[bool, str | No
     """
     Verifica se a parcela é apta pra segunda via chamando a API diretamente.
     Retorna (apta, urlReport).
+    Usa cache para reduzir requisições ao Sienge.
     """
+    cache_key = f"boleto_apto_{titulo_id}_{installment_id}"
+    
+    # Tentar obter do cache (24h - aptidão não muda frequentemente)
+    cache_result = obter_dados_cache(cache_key, validade_horas=24)
+    if cache_result is not None:
+        logging.warning(f"💾 Cache hit para parcela {installment_id}: {cache_result}")
+        return cache_result
+    
     url = f"{BASE_URL}/payment-slip-notification"
     params = {"billReceivableId": titulo_id, "installmentId": installment_id}
     
@@ -194,17 +203,21 @@ def tem_boleto_apto(titulo_id: int, installment_id: int) -> tuple[bool, str | No
         if results:
             url_report = results[0].get("urlReport")
             logging.warning(f"✅ Parcela {installment_id} apta: urlReport={url_report}")
+            salvar_cache(cache_key, (True, url_report))
             return True, url_report
+        salvar_cache(cache_key, (False, None))
         return False, None
     
     if r.status_code == 422:
         # Parcela não apta: sem cobrança, nosso número zerado ou saldo zerado
         error_msg = r.json().get('clientMessage', 'Erro desconhecido')
         logging.warning(f"⏭️ Parcela {installment_id} não apta: {error_msg}")
+        salvar_cache(cache_key, (False, None))
         return False, None
     
     # outros erros (401, 500, etc) — loga separado pra não confundir com "não apta"
     logging.warning(f"⚠️ Erro inesperado ({r.status_code}) ao checar parcela {installment_id} do título {titulo_id}")
+    salvar_cache(cache_key, (False, None))
     return False, None
 
 
@@ -284,17 +297,18 @@ def gerar_link_boleto(titulo_id: int, parcela_id: int) -> str:
     return f"❌ Erro ao gerar boleto ({r.status_code})."
 
 
-def baixar_pdf_boleto(titulo_id: int, parcela_id: int) -> bytes:
+def baixar_pdf_boleto(titulo_id: int, parcela_id: int, pdf_url: str = None) -> bytes:
     """
     Baixa o PDF do boleto da API Sienge.
-    Verifica se a parcela é apta antes de baixar.
+    Se pdf_url for fornecido, usa diretamente (evita requisição duplicada).
+    Caso contrário, verifica se a parcela é apta antes de baixar.
     Retorna o conteúdo do PDF em bytes ou None se houver erro.
     """
-    # Primeiro verifica se a parcela é apta
-    apta, pdf_url = tem_boleto_apto(titulo_id, parcela_id)
-    
-    if not apta or not pdf_url:
-        return None
+    # Se não foi fornecida URL, verifica se a parcela é apta
+    if not pdf_url:
+        apta, pdf_url = tem_boleto_apto(titulo_id, parcela_id)
+        if not apta or not pdf_url:
+            return None
     
     try:
         logging.warning(f"📥 Baixando PDF do boleto {titulo_id}/{parcela_id}")
@@ -421,6 +435,15 @@ def verificar_boletos_vencendo() -> List[Dict]:
             if hoje.date() == data_notificacao.date():
                 logging.warning(f"✅ MATCH! Parcela {parcela.get('installmentId')} - Vencimento: {vencimento.date()}, Notificação: {dias_antes} dias, Data alvo: {data_notificacao.date()}")
                 
+                # Verificar se parcela é apta para gerar boleto
+                titulo_id = parcela.get("billId")
+                parcela_id = parcela.get("installmentId")
+                apta, url_report = tem_boleto_apto(titulo_id, parcela_id)
+                
+                if not apta:
+                    logging.warning(f"⏭️ Parcela {parcela_id} não apta para geração de boleto - pulando")
+                    continue
+                
                 # Buscar telefone do cliente (usar cache se disponível)
                 cliente_id = parcela.get("clientId")
                 cliente_nome = parcela.get("clientName")
@@ -445,14 +468,15 @@ def verificar_boletos_vencendo() -> List[Dict]:
                     "cliente_id": cliente_id,
                     "cliente_nome": cliente_nome,
                     "cliente_telefone": cliente_telefone,
-                    "titulo_id": parcela.get("billId"),
-                    "parcela_id": parcela.get("installmentId"),
+                    "titulo_id": titulo_id,
+                    "parcela_id": parcela_id,
                     "vencimento": vencimento_str,
                     "valor": parcela.get("balanceAmount") or parcela.get("originalAmount") or 0,
                     "dias_antes": dias_antes,
                     "mensagem_template": lembrete.get("mensagem"),
                     "enviar_segunda_via": lembrete.get("enviar_segunda_via", False),
-                    "envio_pdf": lembrete.get("envio_pdf", False)
+                    "envio_pdf": lembrete.get("envio_pdf", False),
+                    "pdf_url": url_report  # URL do PDF da verificação de aptidão
                 })
                 logging.warning(f"✅ Boleto encontrado: {cliente_nome} - Vence em {dias_antes} dias")
     
@@ -477,10 +501,18 @@ def gerar_mensagem_cobranca(boleto: Dict) -> str:
     except:
         valor_formatado = f"R$ {valor}"
     
+    # Formatar dias para texto amigável
+    if dias < 0:
+        dias_texto = f"{abs(dias)} dias antes"
+    elif dias > 0:
+        dias_texto = f"{dias} dias depois"
+    else:
+        dias_texto = "hoje"
+    
     # Substituir variáveis no template
     mensagem = template.replace("{cliente}", cliente)
     mensagem = mensagem.replace("{valor}", valor_formatado)
-    mensagem = mensagem.replace("{dias}", str(dias))
+    mensagem = mensagem.replace("{dias}", dias_texto)
     mensagem = mensagem.replace("{vencimento}", vencimento)
     
     # Manter compatibilidade com enviar_segunda_via (legado)
