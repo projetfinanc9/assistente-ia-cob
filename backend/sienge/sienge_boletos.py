@@ -269,35 +269,44 @@ def buscar_boletos_por_cpf(cpf: str):
 # 🔗 GERAR LINK DO BOLETO (2ª VIA)
 # ============================================================
 def gerar_link_boleto(titulo_id: int, parcela_id: int) -> str:
-    """Gera link da segunda via do boleto."""
+    """Gera link da segunda via do boleto com retry para erro 429."""
+    import time
     url = f"{BASE_URL}/payment-slip-notification"
     params = {"billReceivableId": titulo_id, "installmentId": parcela_id}
+    
+    max_retries = 3
+    
+    for tentativa in range(1, max_retries + 1):
+        logging.info(f"GET {url} -> params={params} (tentativa {tentativa}/{max_retries})")
+        r = requests.get(url, headers=json_headers, params=params, timeout=30)
+        logging.info(f"{url} -> {r.status_code}")
+        logging.info(f"Resposta: {r.text[:400]}")
 
-    logging.info(f"GET {url} -> params={params}")
-    r = requests.get(url, headers=json_headers, params=params, timeout=30)
-    logging.info(f"{url} -> {r.status_code}")
-    logging.info(f"Resposta: {r.text[:400]}")
+        if r.status_code == 200:
+            try:
+                data = r.json()
+                results = data.get("results") or []
+                if results and isinstance(results, list):
+                    result = results[0]
+                    link = result.get("urlReport")
+                    linha_digitavel = result.get("digitableNumber")
 
-    if r.status_code == 200:
-        try:
-            data = r.json()
-            results = data.get("results") or []
-            if results and isinstance(results, list):
-                result = results[0]
-                link = result.get("urlReport")
-                linha_digitavel = result.get("digitableNumber")
-
-                if link:
-                    logging.info(f"🟢 Link do boleto gerado: {link}")
-                    return (
-                        f"🔗 Link do boleto:\n{link}\n\n"
-                        f"💳 Linha digitável:\n`{linha_digitavel}`"
-                    )
-        except Exception as e:
-            logging.exception("Erro ao processar resposta do boleto:")
-            return f"❌ Erro ao processar boleto: {e}"
-
-    elif r.status_code == 422:
-        return "⚠️ O Sienge retornou erro interno ao tentar gerar o boleto. Verifique se há dados inconsistentes no título."
-
+                    if link:
+                        logging.info(f"🟢 Link do boleto gerado: {link}")
+                        return (
+                            f"🔗 Link do boleto:\n{link}\n\n"
+                            f"💳 Linha digitável:\n`{linha_digitavel}`"
+                        )
+            except Exception as e:
+                logging.exception("Erro ao processar resposta do boleto:")
+                return f"❌ Erro ao processar boleto: {e}"
+        elif r.status_code == 429:
+            wait_time = 2 * tentativa
+            logging.warning(f"⚠️ Erro 429 (Too Many Requests). Aguardando {wait_time}s antes de tentar novamente...")
+            time.sleep(wait_time)
+            continue
+        else:
+            logging.error(f"❌ Erro {r.status_code} ao gerar boleto")
+            break
+    
     return f"❌ Erro ao gerar boleto ({r.status_code})."
