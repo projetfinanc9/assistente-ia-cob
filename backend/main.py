@@ -1974,8 +1974,14 @@ async def webhook_cobranca(request: Request):
         except Exception as e:
             logging.warning(f"⚠️ Erro ao salvar log de mensagem recebida: {e}")
         
-        # Responder com mensagem de atendimento (este número é apenas para envio automático)
-        texto_resposta = "Olá, esse número é usado apenas para envio automático. Caso tenha alguma dúvida, fale com um de nossos atendentes pelo número (91) 9999-9999"
+        # Responder com mensagem de atendimento do Supabase (este número é apenas para envio automático)
+        try:
+            from supabase_client import buscar_configuracao_cobranca
+            config = buscar_configuracao_cobranca()
+            texto_resposta = config.get("mensagem_atendimento", "Olá, esse número é usado apenas para envio automático. Caso tenha alguma dúvida, fale com um de nossos atendentes pelo número (91) 9999-9999")
+        except Exception as e:
+            logging.warning(f"⚠️ Erro ao buscar mensagem de atendimento: {e}")
+            texto_resposta = "Olá, esse número é usado apenas para envio automático. Caso tenha alguma dúvida, fale com um de nossos atendentes pelo número (91) 9999-9999"
         
         # Envia resposta via Cloud API
         logging.info(f"📤 Enviando resposta de atendimento para {from_number}...")

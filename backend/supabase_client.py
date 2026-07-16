@@ -220,6 +220,11 @@ def buscar_configuracao_cobranca():
                 })
         
         config["lembretes"] = lembretes
+        
+        # Garantir que mensagem_atendimento existe (valor padrão se não estiver configurado)
+        if "mensagem_atendimento" not in config or not config["mensagem_atendimento"]:
+            config["mensagem_atendimento"] = "Olá, esse número é usado apenas para envio automático. Caso tenha alguma dúvida, fale com um de nossos atendentes pelo número (91) 9999-9999"
+        
         return config
     except Exception as e:
         print(f"❌ Erro ao buscar configuração de cobrança: {e}")

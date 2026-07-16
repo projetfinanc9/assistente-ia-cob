@@ -19,12 +19,14 @@ interface ConfigCobranca {
   ativo: boolean;
   horario_execucao: string;
   lembretes: Lembrete[];
+  mensagem_atendimento: string;
 }
 
 const CobrancaConfig = () => {
   const [config, setConfig] = useState<ConfigCobranca>({
     ativo: false,
     horario_execucao: "09:00",
+    mensagem_atendimento: "Olá, esse número é usado apenas para envio automático. Caso tenha alguma dúvida, fale com um de nossos atendentes pelo número (91) 9999-9999",
     lembretes: [
       {
         dias_antes: 5,
@@ -264,6 +266,31 @@ const CobrancaConfig = () => {
             <Plus className="w-4 h-4 mr-2" />
             Adicionar Lembrete
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Mensagem de Atendimento</CardTitle>
+          <CardDescription>
+            Mensagem enviada automaticamente quando alguém envia mensagem para o número de cobrança
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="mensagem_atendimento">Mensagem de Atendimento</Label>
+            <Textarea
+              id="mensagem_atendimento"
+              value={config.mensagem_atendimento}
+              onChange={(e) => setConfig({ ...config, mensagem_atendimento: e.target.value })}
+              placeholder="Digite a mensagem que será enviada automaticamente..."
+              rows={3}
+              className="resize-none"
+            />
+            <p className="text-sm text-muted-foreground">
+              Esta mensagem será enviada quando alguém tentar interagir com o número de cobrança automática
+            </p>
+          </div>
         </CardContent>
       </Card>
 
