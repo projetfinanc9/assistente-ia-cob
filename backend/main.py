@@ -1974,66 +1974,12 @@ async def webhook_cobranca(request: Request):
         except Exception as e:
             logging.warning(f"⚠️ Erro ao salvar log de mensagem recebida: {e}")
         
-        # Verifica se é uma resposta de botão interativo
-        interactive = msg.get("interactive")
-        if interactive and interactive.get("type") == "button_reply":
-            button_reply = interactive.get("button_reply", {})
-            button_id = button_reply.get("id", "")
-            button_title = button_reply.get("title", "")
-            text = button_title  # Usa o título do botão como texto
-            logging.info(f"🔘 Botão clicado: {button_id} - {button_title}")
-        elif interactive and interactive.get("type") == "list_reply":
-            list_reply = interactive.get("list_reply", {})
-            item_id = list_reply.get("id", "")
-            item_title = list_reply.get("title", "")
-            logging.info(f"📋 List reply recebido: item_id={item_id}, item_title={item_title}")
-            
-            # Se for um item de lista, extrai o comando do ID
-            if item_id.startswith("item_"):
-                # Recupera o contexto para saber qual boleto foi selecionado
-                user_id = f"whatsapp:{from_number}"
-                ctx = usuarios_contexto.get(user_id, {})
-                logging.info(f"🔍 Contexto do usuário {user_id}: {ctx}")
-                
-                boletos = ctx.get("boletos_disponiveis", [])
-                logging.info(f"📋 Boletos disponíveis no contexto: {len(boletos)}")
-                
-                item_index = int(item_id.replace("item_", ""))
-                logging.info(f"🔢 Índice do item: {item_index}")
-                
-                if item_index < len(boletos):
-                    boleto = boletos[item_index]
-                    texto = f"boleto {boleto['titulo_id']} {boleto['parcela_id']}"
-                    text = texto  # Atualiza text com o comando do boleto
-                    logging.info(f"✅ Item da lista selecionado: {item_title} -> {texto}")
-                else:
-                    logging.warning(f"⚠️ Índice {item_index} fora do range (total: {len(boletos)})")
-                    text = item_title if item_title else ""
-            else:
-                logging.warning(f"⚠️ item_id não começa com 'item_': {item_id}")
-                text = item_title if item_title else ""
+        # Responder com mensagem de atendimento (este número é apenas para envio automático)
+        texto_resposta = "Olá, esse número é usado apenas para envio automático. Caso tenha alguma dúvida, fale com um de nossos atendentes pelo número (91) 9999-9999"
         
-        # Proteção final: garantir que text sempre tem valor
-        if not text:
-            text = ""
-            logging.warning("⚠️ text está vazio após processamento, usando string vazia")
-
-        user_id = f"whatsapp:{from_number}"
-        logging.info(f"👤 Processando mensagem do usuário {user_id}: '{text}'")
-
-        # Usa a MESMA lógica do backend normal
-        resposta_construia = await mensagem(Message(user=user_id, text=text))
-        texto_resposta = resposta_construia.get("text", "Constru.IA: não consegui gerar resposta.")
-        logging.info(f"💬 Resposta gerada: '{texto_resposta[:100]}...'")
-        
-        # Passa os botões e list items para a função de envio
-        botoes = resposta_construia.get("buttons", [])
-        list_items = resposta_construia.get("list_items", [])
-        logging.info(f"🔘 Botões: {len(botoes)}, 📋 List items: {len(list_items)}")
-
-        # Envia resposta via Cloud API com botões ou lista
-        logging.info(f"📤 Enviando resposta para {from_number}...")
-        message_id = send_whatsapp_cloud_message(from_number, texto_resposta, botoes, list_items)
+        # Envia resposta via Cloud API
+        logging.info(f"📤 Enviando resposta de atendimento para {from_number}...")
+        message_id = send_whatsapp_cloud_message(from_number, texto_resposta, None, None)
         logging.info(f"✅ Resposta enviada com sucesso")
         logging.warning(f"🆔 message_id retornado pelo send_whatsapp_cloud_message: {message_id}")
         
