@@ -246,10 +246,14 @@ def listar_parcelas_por_periodo_bulk(data_inicio: str, data_fim: str) -> List[Di
     }
     
     logging.warning(f"🔍 Buscando parcelas via Bulk-data: {data_inicio} a {data_fim}")
+    logging.warning(f"🔗 URL: {url}")
+    logging.warning(f"🔑 Headers: {json_headers}")
+    logging.warning(f"📋 Params: {params}")
     r = requests.get(url, headers=json_headers, params=params, timeout=60)
     
     if r.status_code != 200:
         logging.warning(f"⚠️ Erro ao buscar bulk data: {r.status_code}")
+        logging.warning(f"⚠️ Response: {r.text[:500]}")
         return []
     
     data = r.json()
