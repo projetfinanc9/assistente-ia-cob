@@ -1217,24 +1217,8 @@ async def carregar_configuracao_cobranca_api():
     except Exception as e:
         logging.warning(f"⚠️ Erro ao carregar configuração do Supabase: {e}")
     
-    # Fallback para arquivo JSON
-    import json
-    from pathlib import Path
-    
-    config_file = Path(__file__).parent / "cobranca_config.json"
-    
-    if config_file.exists():
-        try:
-            with open(config_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
-                logging.info(f"✅ Configuração carregada do JSON: {len(config.get('lembretes', []))} lembretes")
-                return config
-        except Exception as e:
-            logging.error(f"❌ Erro ao carregar configuração de cobrança: {e}")
-            return {"ativo": False, "lembretes": []}
-    
     # Configuração padrão
-    return {"ativo": False, "horario_execucao": "09:00", "lembretes": []}
+    return {"ativo": False, "horario_execucao": "09:00", "mensagem_atendimento": "Olá, esse número é usado apenas para envio automático. Caso tenha alguma dúvida, fale com um de nossos atendentes pelo número (91) 9999-9999", "lembretes": []}
 
 
 @app.post("/invalidar-cache")
@@ -2225,45 +2209,11 @@ def save_config(config: SiengeConfig):
         return {"success": False, "error": str(e)}
 
 # ============================================================
-# 🔔 CONFIGURAÇÕES DE COBRANÇA AUTOMÁTICA
+# 🔔 CONFIGURAÇÕES DE COBRANÇA AUTOMÁTICA (Supabase)
 # ============================================================
-COBRANCA_CONFIG_FILE = Path(__file__).parent / "cobranca_config.json"
-
-def carregar_configuracao_cobranca():
-    """Carrega configurações de cobrança do arquivo JSON"""
-    if COBRANCA_CONFIG_FILE.exists():
-        try:
-            with open(COBRANCA_CONFIG_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            logging.warning(f"⚠️ Erro ao carregar configuração de cobrança: {e}")
-    # Configuração padrão
-    return {
-        "ativo": False,
-        "lembretes": [
-            {
-                "dias_antes": -5,
-                "mensagem": "Olá {cliente}, seu boleto vence em 5 dias. Valor: R$ {valor}",
-                "enviar_segunda_via": True
-            },
-            {
-                "dias_antes": -1,
-                "mensagem": "Olá {cliente}, seu boleto vence amanhã! Valor: R$ {valor}",
-                "enviar_segunda_via": True
-            }
-        ]
-    }
-
-def salvar_configuracao_cobranca(config: dict):
-    """Salva configurações de cobrança no arquivo JSON"""
-    try:
-        with open(COBRANCA_CONFIG_FILE, 'w', encoding='utf-8') as f:
-            json.dump(config, f, indent=2, ensure_ascii=False)
-        logging.info(f"✅ Configuração de cobrança salva")
-        return True
-    except Exception as e:
-        logging.error(f"❌ Erro ao salvar configuração de cobrança: {e}")
-        return False
+# Funções de configuração de cobrança migradas para Supabase
+# Ver sienge_cobranca.py para carregar_configuracao_cobranca()
+# Ver supabase_client.py para salvar_configuracao_cobranca()
 
 @app.post("/testar-cobranca")
 async def testar_cobranca():

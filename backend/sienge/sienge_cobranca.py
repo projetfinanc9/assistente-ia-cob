@@ -70,12 +70,10 @@ def invalidar_cache(cache_key: str):
 logging.warning("🔔 Rodando módulo sienge_cobranca.py (sistema de cobrança automática com suporte a CNPJ)")
 
 # ============================================================
-# 💾 CONFIGURAÇÕES DE COBRANÇA (MIGRADO PARA SUPABASE)
+# 💾 CONFIGURAÇÕES DE COBRANÇA (Supabase)
 # ============================================================
-COBRANCA_CONFIG_FILE = Path(__file__).parent.parent / "cobranca_config.json"
-
 def carregar_configuracao_cobranca():
-    """Carrega configurações de cobrança do Supabase (com fallback para JSON)"""
+    """Carrega configurações de cobrança do Supabase"""
     try:
         from supabase_client import buscar_configuracao_cobranca
         config_supabase = buscar_configuracao_cobranca()
@@ -85,23 +83,17 @@ def carregar_configuracao_cobranca():
             return {
                 "ativo": config_supabase.get("ativo", False),
                 "horario_execucao": config_supabase.get("horario_execucao", "09:00"),
+                "mensagem_atendimento": config_supabase.get("mensagem_atendimento", "Olá, esse número é usado apenas para envio automático. Caso tenha alguma dúvida, fale com um de nossos atendentes pelo número (91) 9999-9999"),
                 "lembretes": config_supabase.get("lembretes", [])
             }
     except Exception as e:
         logging.warning(f"⚠️ Erro ao carregar configuração do Supabase: {e}")
     
-    # Fallback para arquivo JSON
-    if COBRANCA_CONFIG_FILE.exists():
-        try:
-            with open(COBRANCA_CONFIG_FILE, 'r', encoding='utf-8') as f:
-                config = json.load(f)
-                logging.info(f"✅ Configuração de cobrança carregada do JSON: {len(config.get('lembretes', []))} lembretes")
-                return config
-        except Exception as e:
-            logging.warning(f"⚠️ Erro ao carregar configuração de cobrança: {e}")
     # Configuração padrão
     return {
         "ativo": False,
+        "horario_execucao": "09:00",
+        "mensagem_atendimento": "Olá, esse número é usado apenas para envio automático. Caso tenha alguma dúvida, fale com um de nossos atendentes pelo número (91) 9999-9999",
         "lembretes": [
             {
                 "dias_antes": -5,
