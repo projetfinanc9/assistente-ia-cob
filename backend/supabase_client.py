@@ -241,6 +241,7 @@ def salvar_configuracao_cobranca(dados_config: dict):
     
     try:
         print(f"📝 Tentando salvar configuração: {dados_config}")
+        print(f"📝 mensagem_atendimento nos dados: {dados_config.get('mensagem_atendimento')}")
         
         # Extrair lembretes dos dados
         lembretes = dados_config.pop("lembretes", [])
