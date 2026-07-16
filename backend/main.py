@@ -480,6 +480,7 @@ class LembreteCobranca(BaseModel):
 class ConfiguracaoCobranca(BaseModel):
     ativo: bool
     horario_execucao: str = "09:00"
+    mensagem_atendimento: str = "Olá, esse número é usado apenas para envio automático. Caso tenha alguma dúvida, fale com um de nossos atendentes pelo número (91) 9999-9999"
     lembretes: List[LembreteCobranca]
 
 # ============================================================
@@ -1210,7 +1211,8 @@ async def carregar_configuracao_cobranca_api():
             return {
                 "ativo": config_supabase.get("ativo", False),
                 "horario_execucao": config_supabase.get("horario_execucao", "09:00"),
-                "lembretes": config_supabase.get("lembretes", [])
+                "lembretes": config_supabase.get("lembretes", []),
+                "mensagem_atendimento": config_supabase.get("mensagem_atendimento", "Olá, esse número é usado apenas para envio automático. Caso tenha alguma dúvida, fale com um de nossos atendentes pelo número (91) 9999-9999")
             }
     except Exception as e:
         logging.warning(f"⚠️ Erro ao carregar configuração do Supabase: {e}")
@@ -2398,6 +2400,7 @@ def save_cobranca_config(config: ConfiguracaoCobranca):
         config_dict = {
             "ativo": config.ativo,
             "horario_execucao": config.horario_execucao,
+            "mensagem_atendimento": config.mensagem_atendimento,
             "lembretes": [
                 {
                     "dias_antes": l.dias_antes,
