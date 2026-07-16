@@ -512,11 +512,11 @@ def gerar_mensagem_cobranca(boleto: Dict) -> str:
     except:
         valor_formatado = f"R$ {valor}"
     
-    # Formatar dias para texto amigável
+    # Formatar dias para texto amigável (apenas número absoluto)
     if dias < 0:
-        dias_texto = f"{abs(dias)} dias antes"
+        dias_texto = f"{abs(dias)}"
     elif dias > 0:
-        dias_texto = f"{dias} dias depois"
+        dias_texto = f"{dias}"
     else:
         dias_texto = "hoje"
     
