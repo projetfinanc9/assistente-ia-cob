@@ -373,9 +373,21 @@ def verificar_boletos_vencendo() -> List[Dict]:
         
         if not cost_centers_ids:
             logging.warning("⚠️ Nenhum centro de custo encontrado em empreendimentos ativos")
-            return []
-        
-        logging.warning(f"🎯 Filtrando cobrança para {len(cost_centers_ids)} centros de custo de empreendimentos ativos")
+            # Tentar usar company_ids como fallback
+            result = supabase.table("empreendimentos_cobranca").select("company_id").eq("ativo", True).execute()
+            company_ids = []
+            for item in result.data:
+                if item.get("company_id"):
+                    company_ids.append(item["company_id"])
+            
+            if company_ids:
+                cost_centers_ids = list(set(company_ids))
+                logging.warning(f"🔄 Usando {len(cost_centers_ids)} company_ids como fallback para centros de custo")
+            else:
+                logging.warning("⚠️ Nenhum company_id encontrado também, usando todos os empreendimentos")
+                cost_centers_ids = None
+        else:
+            logging.warning(f"🎯 Filtrando cobrança para {len(cost_centers_ids)} centros de custo de empreendimentos ativos")
     except Exception as e:
         logging.warning(f"⚠️ Erro ao obter centros de custo ativos, usando todos: {e}")
         cost_centers_ids = None

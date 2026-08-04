@@ -138,17 +138,13 @@ def salvar_empreendimento_supabase(supabase_client, empreendimento_data: Dict) -
         
         logging.warning(f"💾 Salvando empreendimento {enterprise_id} - {enterprise_name}")
         
-        # Buscar agrupamentos para obter cost_center_ids
+        # Usar companyId como cost_center_id (solução alternativa pois API de agrupamentos retorna 403)
         cost_center_ids = []
-        try:
-            agrupamentos = buscar_agrupamentos_empreendimento(enterprise_id)
-            if agrupamentos and "results" in agrupamentos:
-                for agrupamento in agrupamentos["results"]:
-                    if agrupamento.get("costCenterId"):
-                        cost_center_ids.append(agrupamento["costCenterId"])
-                logging.warning(f"📦 {len(cost_center_ids)} centros de custo encontrados para empreendimento {enterprise_id}")
-        except Exception as e:
-            logging.warning(f"⚠️ Erro ao buscar agrupamentos do empreendimento {enterprise_id}: {e}")
+        if company_id:
+            cost_center_ids = [company_id]
+            logging.warning(f"📦 Usando companyId {company_id} como centro de custo para empreendimento {enterprise_id}")
+        else:
+            logging.warning(f"⚠️ Empreendimento {enterprise_id} não tem companyId")
         
         # Verificar se já existe
         existing = supabase_client.table("empreendimentos_cobranca").select("*").eq("enterprise_id", enterprise_id).execute()
@@ -274,6 +270,7 @@ def atualizar_status_empreendimento(supabase_client, enterprise_id: int, ativo: 
 def obter_cost_centers_ativos(supabase_client) -> List[int]:
     """
     Obtém lista de IDs de centros de custo dos empreendimentos ativos.
+    Usa company_ids como fallback se cost_center_ids estiver vazio.
     
     Args:
         supabase_client: Cliente do Supabase
@@ -291,11 +288,17 @@ def obter_cost_centers_ativos(supabase_client) -> List[int]:
             enterprise_id = item.get("enterprise_id")
             enterprise_name = item.get("enterprise_name")
             cc_ids = item.get("cost_center_ids")
+            company_id = item.get("company_id")
             
-            logging.warning(f"📋 Empreendimento {enterprise_id} ({enterprise_name}): {cc_ids}")
-            
+            # Priorizar cost_center_ids, usar company_id como fallback
             if cc_ids:
                 cost_centers.extend(cc_ids)
+                logging.warning(f"📋 Empreendimento {enterprise_id} ({enterprise_name}): cost_center_ids={cc_ids}")
+            elif company_id:
+                cost_centers.append(company_id)
+                logging.warning(f"📋 Empreendimento {enterprise_id} ({enterprise_name}): usando company_id={company_id} como fallback")
+            else:
+                logging.warning(f"⚠️ Empreendimento {enterprise_id} ({enterprise_name}): sem cost_center_ids ou company_id")
         
         # Remove duplicatas
         cost_centers_unicos = list(set(cost_centers))
