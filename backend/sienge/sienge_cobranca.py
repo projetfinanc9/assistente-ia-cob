@@ -394,21 +394,39 @@ def verificar_boletos_vencendo() -> List[Dict]:
     
     logging.warning(f"🔍 Verificando boletos com {len(lembretes)} lembretes configurados...")
     
-    # Calcular range de datas para busca otimizada
-    dias_configurados = [lem.get("dias_antes", 0) for lem in lembretes]
-    dias_max = max(dias_configurados) if dias_configurados else 0
-    dias_min = min(dias_configurados) if dias_configurados else 0
-    
-    # Buscar parcelas que vencem no range configurado usando API Bulk-data
+    # Calcular datas alvo com base na data atual e configurações
+    # Exemplo: hoje = 04/08, dias_antes = -6 → data alvo = 10/08 (vence em 6 dias)
     hoje = datetime.now()
-    # Se tiver dias positivos (depois do vencimento), buscar boletos vencidos há mais tempo
-    if dias_max > 0:
-        data_inicio = (hoje + timedelta(days=dias_min - dias_max)).strftime("%Y-%m-%d")
-    else:
-        data_inicio = (hoje + timedelta(days=dias_min)).strftime("%Y-%m-%d")
-    data_fim = (hoje + timedelta(days=dias_max)).strftime("%Y-%m-%d")
+    datas_alvo = []
     
-    logging.warning(f"📅 Buscando parcelas via Bulk-data: {data_inicio} até {data_fim}")
+    for lem in lembretes:
+        dias_antes = lem.get("dias_antes", 0)
+        
+        if dias_antes < 0:
+            # Dias antes do vencimento (negativo): busca boletos que vencem no futuro
+            # -6 dias antes = boleto vence em 6 dias = hoje + 6
+            data_alvo = hoje + timedelta(days=abs(dias_antes))
+        elif dias_antes > 0:
+            # Dias depois do vencimento (positivo): busca boletos que venceram no passado
+            # +6 dias depois = boleto venceu há 6 dias = hoje - 6
+            data_alvo = hoje - timedelta(days=dias_antes)
+        else:
+            # No dia do vencimento
+            data_alvo = hoje
+        
+        datas_alvo.append(data_alvo)
+        logging.warning(f"📅 Lembrete: {dias_antes} dias → data alvo: {data_alvo.strftime('%Y-%m-%d')}")
+    
+    # Calcular range de busca (mínimo e máximo das datas alvo)
+    if datas_alvo:
+        data_inicio = min(datas_alvo).strftime("%Y-%m-%d")
+        data_fim = max(datas_alvo).strftime("%Y-%m-%d")
+        logging.warning(f"📅 Range de busca: {data_inicio} até {data_fim}")
+    else:
+        # Fallback se não houver lembretes
+        data_inicio = hoje.strftime("%Y-%m-%d")
+        data_fim = (hoje + timedelta(days=7)).strftime("%Y-%m-%d")
+        logging.warning(f"📅 Range de busca (fallback): {data_inicio} até {data_fim}")
     
     # Usar API Bulk-data (1 requisição apenas!) com filtro de centros de custo
     parcelas_bulk = listar_parcelas_por_periodo_bulk(data_inicio, data_fim, cost_centers_ids)
