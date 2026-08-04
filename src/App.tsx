@@ -8,6 +8,7 @@ import CobrancaConfig from "./pages/CobrancaConfig";
 import Dashboard from "./pages/Dashboard";
 import History from "./pages/History";
 import Messages from "./pages/Messages";
+import Enterprises from "./pages/Enterprises";
 import NotFound from "./pages/NotFound";
 import DashboardLayout from "./layouts/DashboardLayout";
 
@@ -25,6 +26,7 @@ const App = () => (
             <Route path="history" element={<History />} />
             <Route path="messages" element={<Messages />} />
             <Route path="cobranca-config" element={<CobrancaConfig />} />
+            <Route path="enterprises" element={<Enterprises />} />
             <Route path="settings" element={<Settings />} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

@@ -2,8 +2,15 @@
 Cliente Supabase para integração com banco de dados
 """
 import os
+import sys
 from supabase import create_client, Client
 from dotenv import load_dotenv
+
+# Configurar encoding para UTF-8 no Windows
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 load_dotenv()
 
@@ -21,11 +28,11 @@ if SUPABASE_URL and SUPABASE_KEY:
         key_to_use = SUPABASE_SERVICE_ROLE_KEY if SUPABASE_SERVICE_ROLE_KEY else SUPABASE_KEY
         key_type = "SERVICE_ROLE" if SUPABASE_SERVICE_ROLE_KEY else "ANON"
         supabase = create_client(SUPABASE_URL, key_to_use)
-        print(f"✅ Cliente Supabase inicializado com sucesso (usando {key_type} key)")
+        print(f"OK Cliente Supabase inicializado com sucesso (usando {key_type} key)")
     except Exception as e:
-        print(f"❌ Erro ao inicializar cliente Supabase: {e}")
+        print(f"ERRO Erro ao inicializar cliente Supabase: {e}")
 else:
-    print("⚠️ SUPABASE_URL ou SUPABASE_KEY não configurados no .env")
+    print("AVISO SUPABASE_URL ou SUPABASE_KEY nao configurados no .env")
 
 
 # ============================================================

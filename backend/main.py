@@ -3,11 +3,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import PlainTextResponse, HTMLResponse, StreamingResponse
 import io
+import sys
 from pydantic import BaseModel
 from typing import List, Optional
 import logging, re, base64, os
 import json
 from pathlib import Path
+
+# Configurar encoding para UTF-8 no Windows
+if sys.platform == 'win32':
+    import io as io_module
+    sys.stdout = io_module.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io_module.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 import pandas as pd
 import requests  # <-- para chamar a API do WhatsApp Cloud
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -2428,4 +2435,113 @@ def test_sienge_connection(config: SiengeConfig):
             return {"success": False, "error": f"Erro na conexão: {response.status_code}"}
     except Exception as e:
         logging.error(f"❌ Erro ao testar conexão: {e}")
+        return {"success": False, "error": str(e)}
+
+# ============================================================
+# 🏢 ENDPOINTS DE EMPREENDIMENTOS
+# ============================================================
+
+class EnterpriseSyncRequest(BaseModel):
+    company_id: Optional[int] = None
+    enterprise_type: Optional[int] = None
+
+class EnterpriseStatusRequest(BaseModel):
+    enterprise_id: int
+    ativo: bool
+
+@app.get("/enterprises")
+def get_enterprises(ativo_only: bool = False):
+    """Lista empreendimentos do Supabase"""
+    try:
+        from supabase_client import supabase
+        from sienge.sienge_empreendimentos import listar_empreendimentos_supabase
+        
+        empreendimentos = listar_empreendimentos_supabase(supabase, ativo_only)
+        return {
+            "success": True,
+            "data": empreendimentos,
+            "total": len(empreendimentos)
+        }
+    except Exception as e:
+        logging.error(f"❌ Erro ao listar empreendimentos: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.post("/enterprises/sync")
+def sync_enterprises(request: EnterpriseSyncRequest):
+    """Sincroniza empreendimentos do Sienge com o Supabase"""
+    try:
+        from supabase_client import supabase
+        from sienge.sienge_empreendimentos import sincronizar_empreendimentos
+        
+        stats = sincronizar_empreendimentos(
+            supabase,
+            company_id=request.company_id,
+            enterprise_type=request.enterprise_type
+        )
+        
+        return {
+            "success": True,
+            "data": stats,
+            "message": f"Sincronização concluída: {stats['novos_empreendimentos']} novos, {stats['empreendimentos_atualizados']} atualizados"
+        }
+    except Exception as e:
+        logging.error(f"❌ Erro ao sincronizar empreendimentos: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.post("/enterprises/status")
+def update_enterprise_status(request: EnterpriseStatusRequest):
+    """Atualiza o status de um empreendimento"""
+    try:
+        from supabase_client import supabase
+        from sienge.sienge_empreendimentos import atualizar_status_empreendimento
+        
+        empreendimento = atualizar_status_empreendimento(
+            supabase,
+            request.enterprise_id,
+            request.ativo
+        )
+        
+        status_str = "ativado" if request.ativo else "desativado"
+        return {
+            "success": True,
+            "data": empreendimento,
+            "message": f"Empreendimento {status_str} com sucesso"
+        }
+    except Exception as e:
+        logging.error(f"❌ Erro ao atualizar status do empreendimento: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.get("/enterprises/logs")
+def get_sync_logs(limit: int = 10):
+    """Lista logs de sincronização de empreendimentos"""
+    try:
+        from supabase_client import supabase
+        
+        result = supabase.table("logs_sincronizacao_empreendimentos").select("*").order("data_sincronizacao", desc=True).limit(limit).execute()
+        
+        return {
+            "success": True,
+            "data": result.data,
+            "total": len(result.data)
+        }
+    except Exception as e:
+        logging.error(f"❌ Erro ao listar logs de sincronização: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.get("/enterprises/cost-centers")
+def get_active_cost_centers():
+    """Obtém centros de custo dos empreendimentos ativos"""
+    try:
+        from supabase_client import supabase
+        from sienge.sienge_empreendimentos import obter_cost_centers_ativos
+        
+        cost_centers = obter_cost_centers_ativos(supabase)
+        
+        return {
+            "success": True,
+            "data": cost_centers,
+            "total": len(cost_centers)
+        }
+    except Exception as e:
+        logging.error(f"❌ Erro ao obter centros de custo ativos: {e}")
         return {"success": False, "error": str(e)}

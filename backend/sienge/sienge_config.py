@@ -14,8 +14,8 @@ senha_padrao = "9SQ2MaNrFOeZOOuOAqeSRy7bYWYDDf85"
 
 # Prioriza variáveis de ambiente
 subdominio = os.getenv("SIENGE_SUBDOMINIO") or subdominio_padrao
-usuario = os.getenv("SIENGE_USERNAME") or usuario_padrao
-senha = os.getenv("SIENGE_PASSWORD") or senha_padrao
+usuario = os.getenv("SIENGE_USUARIO") or os.getenv("SIENGE_USERNAME") or usuario_padrao
+senha = os.getenv("SIENGE_SENHA") or os.getenv("SIENGE_PASSWORD") or senha_padrao
 
 logging.info(f"🔧 Configurações Sienge - Subdomain: {subdominio}, User: {usuario}")
 logging.info(f"🔧 Variáveis de ambiente: SUBDOMAIN={os.getenv('SIENGE_SUBDOMINIO')}, USERNAME={os.getenv('SIENGE_USERNAME')}, PASSWORD={'***' if os.getenv('SIENGE_PASSWORD') else 'None'}")

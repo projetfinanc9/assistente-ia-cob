@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timedelta
-from typing import List, Dict
+from typing import List, Dict, Optional
 import requests
 import re
 import json
@@ -224,12 +224,19 @@ def tem_boleto_apto(titulo_id: int, installment_id: int) -> tuple[bool, str | No
     return False, None
 
 
-def listar_parcelas_por_periodo_bulk(data_inicio: str, data_fim: str) -> List[Dict]:
+def listar_parcelas_por_periodo_bulk(data_inicio: str, data_fim: str, cost_centers_ids: Optional[List[int]] = None) -> List[Dict]:
     """
     Usa API Bulk-data para buscar parcelas por período de vencimento.
     Economia massiva de requisições comparado à API tradicional.
+    
+    Args:
+        data_inicio: Data início do período
+        data_fim: Data fim do período
+        cost_centers_ids: Lista de IDs de centros de custo para filtrar (opcional)
     """
-    cache_key = f"bulk_parcelas_{data_inicio}_{data_fim}"
+    # Criar chave de cache incluindo os centros de custo
+    cache_key_suffix = f"_{','.join(map(str, cost_centers_ids))}" if cost_centers_ids else ""
+    cache_key = f"bulk_parcelas_{data_inicio}_{data_fim}{cache_key_suffix}"
     
     # Tentar obter do cache
     dados_cache = obter_dados_cache(cache_key, validade_horas=1)  # Cache de 1h para dados de período
@@ -244,6 +251,11 @@ def listar_parcelas_por_periodo_bulk(data_inicio: str, data_fim: str) -> List[Di
         "endDate": data_fim,
         "selectionType": "D"  # D = data de vencimento da parcela
     }
+    
+    # Adicionar filtro de centros de custo se fornecidos
+    if cost_centers_ids:
+        params["costCentersId"] = cost_centers_ids
+        logging.warning(f"🎯 Filtrando por centros de custo: {cost_centers_ids}")
     
     logging.warning(f"🔍 Buscando parcelas via Bulk-data: {data_inicio} a {data_fim}")
     logging.warning(f"🔗 URL: {url}")
@@ -352,6 +364,22 @@ def verificar_boletos_vencendo() -> List[Dict]:
         logging.warning("⚠️ Nenhum lembrete configurado")
         return []
     
+    # Obter centros de custo dos empreendimentos ativos
+    try:
+        from supabase_client import supabase
+        from sienge.sienge_empreendimentos import obter_cost_centers_ativos
+        
+        cost_centers_ids = obter_cost_centers_ativos(supabase)
+        
+        if not cost_centers_ids:
+            logging.warning("⚠️ Nenhum centro de custo encontrado em empreendimentos ativos")
+            return []
+        
+        logging.warning(f"🎯 Filtrando cobrança para {len(cost_centers_ids)} centros de custo de empreendimentos ativos")
+    except Exception as e:
+        logging.warning(f"⚠️ Erro ao obter centros de custo ativos, usando todos: {e}")
+        cost_centers_ids = None
+    
     logging.warning(f"🔍 Verificando boletos com {len(lembretes)} lembretes configurados...")
     
     # Calcular range de datas para busca otimizada
@@ -370,8 +398,8 @@ def verificar_boletos_vencendo() -> List[Dict]:
     
     logging.warning(f"📅 Buscando parcelas via Bulk-data: {data_inicio} até {data_fim}")
     
-    # Usar API Bulk-data (1 requisição apenas!)
-    parcelas_bulk = listar_parcelas_por_periodo_bulk(data_inicio, data_fim)
+    # Usar API Bulk-data (1 requisição apenas!) com filtro de centros de custo
+    parcelas_bulk = listar_parcelas_por_periodo_bulk(data_inicio, data_fim, cost_centers_ids)
     
     if not parcelas_bulk:
         logging.warning("📭 Nenhuma parcela encontrada no período via Bulk-data")
