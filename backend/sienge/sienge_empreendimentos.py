@@ -136,6 +136,20 @@ def salvar_empreendimento_supabase(supabase_client, empreendimento_data: Dict) -
         enterprise_type = empreendimento_data.get("type")
         company_id = empreendimento_data.get("companyId")
         
+        logging.warning(f"💾 Salvando empreendimento {enterprise_id} - {enterprise_name}")
+        
+        # Buscar agrupamentos para obter cost_center_ids
+        cost_center_ids = []
+        try:
+            agrupamentos = buscar_agrupamentos_empreendimento(enterprise_id)
+            if agrupamentos and "results" in agrupamentos:
+                for agrupamento in agrupamentos["results"]:
+                    if agrupamento.get("costCenterId"):
+                        cost_center_ids.append(agrupamento["costCenterId"])
+                logging.warning(f"📦 {len(cost_center_ids)} centros de custo encontrados para empreendimento {enterprise_id}")
+        except Exception as e:
+            logging.warning(f"⚠️ Erro ao buscar agrupamentos do empreendimento {enterprise_id}: {e}")
+        
         # Verificar se já existe
         existing = supabase_client.table("empreendimentos_cobranca").select("*").eq("enterprise_id", enterprise_id).execute()
         
@@ -145,6 +159,7 @@ def salvar_empreendimento_supabase(supabase_client, empreendimento_data: Dict) -
                 "enterprise_name": enterprise_name,
                 "enterprise_type": enterprise_type,
                 "company_id": company_id,
+                "cost_center_ids": cost_center_ids if cost_center_ids else None,
                 "sienge_data": empreendimento_data,
                 "updated_at": datetime.utcnow().isoformat()
             }
@@ -164,7 +179,7 @@ def salvar_empreendimento_supabase(supabase_client, empreendimento_data: Dict) -
                 update_data["sales_details"] = empreendimento_data["salesDetails"]
             
             result = supabase_client.table("empreendimentos_cobranca").update(update_data).eq("enterprise_id", enterprise_id).execute()
-            logging.info(f"🔄 Empreendimento {enterprise_id} atualizado no Supabase")
+            logging.info(f"🔄 Empreendimento {enterprise_id} atualizado no Supabase com {len(cost_center_ids)} centros de custo")
             return result.data[0]
         else:
             # Criar novo registro
@@ -173,6 +188,7 @@ def salvar_empreendimento_supabase(supabase_client, empreendimento_data: Dict) -
                 "enterprise_name": enterprise_name,
                 "enterprise_type": enterprise_type,
                 "company_id": company_id,
+                "cost_center_ids": cost_center_ids if cost_center_ids else None,
                 "ativo": False,  # Default inativo
                 "sienge_data": empreendimento_data
             }
@@ -192,7 +208,7 @@ def salvar_empreendimento_supabase(supabase_client, empreendimento_data: Dict) -
                 insert_data["sales_details"] = empreendimento_data["salesDetails"]
             
             result = supabase_client.table("empreendimentos_cobranca").insert(insert_data).execute()
-            logging.info(f"✅ Empreendimento {enterprise_id} criado no Supabase")
+            logging.info(f"✅ Empreendimento {enterprise_id} criado no Supabase com {len(cost_center_ids)} centros de custo")
             return result.data[0]
             
     except Exception as e:
@@ -266,15 +282,26 @@ def obter_cost_centers_ativos(supabase_client) -> List[int]:
         Lista de IDs de centros de custo
     """
     try:
-        result = supabase_client.table("empreendimentos_cobranca").select("cost_center_ids").eq("ativo", True).execute()
+        result = supabase_client.table("empreendimentos_cobranca").select("*").eq("ativo", True).execute()
+        
+        logging.warning(f"🔍 {len(result.data)} empreendimentos ativos encontrados no Supabase")
         
         cost_centers = []
         for item in result.data:
-            if item.get("cost_center_ids"):
-                cost_centers.extend(item["cost_center_ids"])
+            enterprise_id = item.get("enterprise_id")
+            enterprise_name = item.get("enterprise_name")
+            cc_ids = item.get("cost_center_ids")
+            
+            logging.warning(f"📋 Empreendimento {enterprise_id} ({enterprise_name}): {cc_ids}")
+            
+            if cc_ids:
+                cost_centers.extend(cc_ids)
         
-        logging.info(f"🎯 {len(cost_centers)} centros de custo encontrados em empreendimentos ativos")
-        return list(set(cost_centers))  # Remove duplicatas
+        # Remove duplicatas
+        cost_centers_unicos = list(set(cost_centers))
+        logging.warning(f"🎯 {len(cost_centers_unicos)} centros de custo únicos encontrados em empreendimentos ativos")
+        
+        return cost_centers_unicos
         
     except Exception as e:
         logging.error(f"❌ Erro ao obter centros de custo ativos: {e}")
