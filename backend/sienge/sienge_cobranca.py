@@ -216,12 +216,21 @@ def tem_boleto_apto(titulo_id: int, installment_id: int) -> tuple[bool, str | No
             time.sleep(wait_time)
             continue
         
+        # Erro 403 (permissão negada) - usar fallback assumindo que parcela é apta
+        if r.status_code == 403:
+            logging.warning(f"⚠️ API payment-slip-notification retornou 403 (sem permissão)")
+            logging.warning(f"🔄 Usando fallback: assumindo parcela {installment_id} apta (foi encontrada via bulk-data)")
+            salvar_cache(cache_key, (True, None))
+            return True, None
+        
         # outros erros (401, 500, etc) — loga separado pra não confundir com "não apta"
         logging.warning(f"⚠️ Erro inesperado ({r.status_code}) ao checar parcela {installment_id} do título {titulo_id}")
         break
     
-    salvar_cache(cache_key, (False, None))
-    return False, None
+    # Fallback: se a parcela foi encontrada via bulk-data, assumir que é apta
+    logging.warning(f"⚠️ Não foi possível verificar aptidão via API, assumindo apta por fallback")
+    salvar_cache(cache_key, (True, None))
+    return True, None
 
 
 def listar_parcelas_por_periodo_bulk(data_inicio: str, data_fim: str, cost_centers_ids: Optional[List[int]] = None) -> List[Dict]:
@@ -327,6 +336,7 @@ def baixar_pdf_boleto(titulo_id: int, parcela_id: int, pdf_url: str = None) -> b
     if not pdf_url:
         apta, pdf_url = tem_boleto_apto(titulo_id, parcela_id)
         if not apta or not pdf_url:
+            logging.warning(f"⚠️ Parcela {titulo_id}/{parcela_id} não apta ou sem URL de PDF")
             return None
     
     try:
