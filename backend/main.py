@@ -2545,3 +2545,18 @@ def get_active_cost_centers():
     except Exception as e:
         logging.error(f"❌ Erro ao obter centros de custo ativos: {e}")
         return {"success": False, "error": str(e)}
+
+
+@app.get("/debug/sienge-config")
+async def debug_sienge_config():
+    """Endpoint de diagnóstico para verificar configuração do Sienge"""
+    from dotenv import load_dotenv
+    load_dotenv()
+    
+    return {
+        "SIENGE_SUBDOMINIO": os.getenv("SIENGE_SUBDOMINIO"),
+        "SIENGE_USUARIO": os.getenv("SIENGE_USUARIO"),
+        "SIENGE_SENHA": "***" if os.getenv("SIENGE_SENHA") else "NÃO CONFIGURADO",
+        "SIENGE_SENHA_LENGTH": len(os.getenv("SIENGE_SENHA", "")),
+        "BASE_URL": f"https://api.sienge.com.br/{os.getenv('SIENGE_SUBDOMINIO')}/public/api/v1"
+    }
