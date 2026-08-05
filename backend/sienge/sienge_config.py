@@ -12,8 +12,8 @@ subdominio_padrao = "cctcontrol"
 usuario_padrao = "cctcontrol-api"
 senha_padrao = "9SQ2MaNrFOeZOOuOAqeSRy7bYWYDDf85"
 
-# Prioriza variáveis de ambiente
-subdominio = os.getenv("SIENGE_SUBDOMINIO") or subdominio_padrao
+# Prioriza variáveis de ambiente (suporta nomes em português e inglês)
+subdominio = os.getenv("SIENGE_SUBDOMINIO") or os.getenv("SIENGE_SUBDOMAIN") or subdominio_padrao
 usuario = os.getenv("SIENGE_USUARIO") or os.getenv("SIENGE_USERNAME") or usuario_padrao
 senha = os.getenv("SIENGE_SENHA") or os.getenv("SIENGE_PASSWORD") or senha_padrao
 

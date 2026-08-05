@@ -2553,10 +2553,21 @@ async def debug_sienge_config():
     from dotenv import load_dotenv
     load_dotenv()
     
+    # Verificar ambos os nomes (português e inglês)
+    subdominio = os.getenv("SIENGE_SUBDOMINIO") or os.getenv("SIENGE_SUBDOMAIN")
+    usuario = os.getenv("SIENGE_USUARIO") or os.getenv("SIENGE_USERNAME")
+    senha = os.getenv("SIENGE_SENHA") or os.getenv("SIENGE_PASSWORD")
+    
     return {
         "SIENGE_SUBDOMINIO": os.getenv("SIENGE_SUBDOMINIO"),
+        "SIENGE_SUBDOMAIN": os.getenv("SIENGE_SUBDOMAIN"),
         "SIENGE_USUARIO": os.getenv("SIENGE_USUARIO"),
+        "SIENGE_USERNAME": os.getenv("SIENGE_USERNAME"),
         "SIENGE_SENHA": "***" if os.getenv("SIENGE_SENHA") else "NÃO CONFIGURADO",
-        "SIENGE_SENHA_LENGTH": len(os.getenv("SIENGE_SENHA", "")),
-        "BASE_URL": f"https://api.sienge.com.br/{os.getenv('SIENGE_SUBDOMINIO')}/public/api/v1"
+        "SIENGE_PASSWORD": "***" if os.getenv("SIENGE_PASSWORD") else "NÃO CONFIGURADO",
+        "SIENGE_SENHA_LENGTH": len(senha or ""),
+        "BASE_URL": f"https://api.sienge.com.br/{subdominio}/public/api/v1" if subdominio else "https://api.sienge.com.br/None/public/api/v1",
+        "EFFECTIVE_SUBDOMAIN": subdominio,
+        "EFFECTIVE_USER": usuario,
+        "EFFECTIVE_PASSWORD_CONFIGURED": bool(senha)
     }
