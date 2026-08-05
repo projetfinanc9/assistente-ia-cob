@@ -261,10 +261,10 @@ def listar_parcelas_por_periodo_bulk(data_inicio: str, data_fim: str, cost_cente
         "selectionType": "D"  # D = data de vencimento da parcela
     }
     
-    # Adicionar filtro de centros de custo se fornecidos
+    # Adicionar filtro de enterprise_codes se fornecidos
     if cost_centers_ids:
-        params["costCentersId"] = cost_centers_ids
-        logging.warning(f"🎯 Filtrando por centros de custo: {cost_centers_ids}")
+        params["enterpriseCode"] = cost_centers_ids
+        logging.warning(f"🎯 Filtrando por enterprise_codes: {cost_centers_ids}")
     
     logging.warning(f"🔍 Buscando parcelas via Bulk-data: {data_inicio} a {data_fim}")
     logging.warning(f"🔗 URL: {url}")
