@@ -13,7 +13,7 @@ logging.warning("🚀 Rodando módulo sienge_empreendimentos.py (gestão de empr
 
 def listar_empreendimentos_sienge(company_id: Optional[int] = None, enterprise_type: Optional[int] = None) -> List[Dict]:
     """
-    Busca lista de empreendimentos no Sienge.
+    Busca lista de empreendimentos no Sienge com paginação.
     
     Args:
         company_id: Filtra por empresa (opcional)
@@ -24,30 +24,48 @@ def listar_empreendimentos_sienge(company_id: Optional[int] = None, enterprise_t
     """
     try:
         url = f"{BASE_URL}/enterprises"
-        params = {}
+        all_results = []
+        offset = 0
+        limit = 100  # Limite por página
         
-        if company_id:
-            params["companyId"] = company_id
-        if enterprise_type:
-            params["type"] = enterprise_type
+        while True:
+            params = {}
+            
+            if company_id:
+                params["companyId"] = company_id
+            if enterprise_type:
+                params["type"] = enterprise_type
+            
+            params["limit"] = limit
+            params["offset"] = offset
+            
+            logging.info(f"📋 Buscando empreendimentos no Sienge: {url}")
+            logging.info(f"📋 Parâmetros: {params}")
+            
+            r = requests.get(url, headers=json_headers, params=params, timeout=30)
+            logging.info(f"📋 Status: {r.status_code}")
+            
+            if r.status_code != 200:
+                logging.error(f"❌ Erro ao buscar empreendimentos: {r.status_code} - {r.text}")
+                break
+            
+            data = r.json()
+            results = data.get("results") or []
+            
+            if not results:
+                break
+            
+            all_results.extend(results)
+            logging.info(f"✅ {len(results)} empreendimentos nesta página (total até agora: {len(all_results)})")
+            
+            # Verificar se há mais páginas
+            if len(results) < limit:
+                break
+            
+            offset += limit
         
-        params["limit"] = 200  # Máximo permitido pela API
-        
-        logging.info(f"📋 Buscando empreendimentos no Sienge: {url}")
-        logging.info(f"📋 Parâmetros: {params}")
-        
-        r = requests.get(url, headers=json_headers, params=params, timeout=30)
-        logging.info(f"📋 Status: {r.status_code}")
-        
-        if r.status_code != 200:
-            logging.error(f"❌ Erro ao buscar empreendimentos: {r.status_code} - {r.text}")
-            return []
-        
-        data = r.json()
-        results = data.get("results") or []
-        
-        logging.info(f"✅ {len(results)} empreendimentos encontrados no Sienge")
-        return results
+        logging.info(f"✅ {len(all_results)} empreendimentos encontrados no Sienge (total)")
+        return all_results
         
     except Exception as e:
         logging.error(f"❌ Erro ao listar empreendimentos do Sienge: {e}")
