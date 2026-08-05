@@ -145,11 +145,24 @@ async def executar_cobranca_agendada():
                             logging.warning(f"🆔 histórico_id: {historico_id}")
                             try:
                                 message_id = send_whatsapp_document(numero, pdf_content, filename, mensagem)
-                                logging.warning(f"✅ PDF enviado com sucesso para {numero}")
-                                logging.warning(f"🆔 message_id retornado: {message_id}")
                                 
-                                # Salvar log de mensagem enviada com message_id
-                                if message_id:
+                                # Verificar se o envio foi bem-sucedido
+                                if message_id is None:
+                                    logging.warning(f"❌ Falha ao enviar PDF para {numero}")
+                                    if historico_id:
+                                        try:
+                                            atualizar_historico_cobranca(historico_id, {
+                                                "status": "erro",
+                                                "erro_mensagem": "Erro ao enviar PDF via WhatsApp Cloud API (401 Authentication Error)"
+                                            })
+                                            logging.warning(f"✅ Status atualizado para erro")
+                                        except Exception as e:
+                                            logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
+                                else:
+                                    logging.warning(f"✅ PDF enviado com sucesso para {numero}")
+                                    logging.warning(f"🆔 message_id retornado: {message_id}")
+                                    
+                                    # Salvar log de mensagem enviada com message_id
                                     logging.warning(f"💾 Tentando salvar log de mensagem com message_id: {message_id}")
                                     try:
                                         from supabase_client import salvar_log_mensagem
@@ -165,19 +178,17 @@ async def executar_cobranca_agendada():
                                         logging.warning(f"💾 Log de mensagem salvo com message_id: {message_id} - Resultado: {resultado}")
                                     except Exception as e:
                                         logging.warning(f"⚠️ Erro ao salvar log de mensagem enviada: {e}")
-                                else:
-                                    logging.warning(f"⚠️ message_id é None, não salvando log")
-                                
-                                # Atualizar status no histórico
-                                if historico_id:
-                                    try:
-                                        atualizar_historico_cobranca(historico_id, {
-                                            "status": "enviado",
-                                            "enviado_em": datetime.now().isoformat()
-                                        })
-                                        logging.warning(f"✅ Status atualizado para enviado")
-                                    except Exception as e:
-                                        logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
+                                    
+                                    # Atualizar status no histórico
+                                    if historico_id:
+                                        try:
+                                            atualizar_historico_cobranca(historico_id, {
+                                                "status": "enviado",
+                                                "enviado_em": datetime.now().isoformat()
+                                            })
+                                            logging.warning(f"✅ Status atualizado para enviado")
+                                        except Exception as e:
+                                            logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
                             except Exception as e:
                                 logging.warning(f"❌ Erro ao enviar PDF via WhatsApp: {e}")
                                 # Atualizar status como erro
@@ -1056,10 +1067,24 @@ async def testar_cobranca():
                                 logging.warning(f"🆔 histórico_id: {historico_id}")
                                 try:
                                     message_id = send_whatsapp_document(numero, pdf_content, filename, mensagem)
-                                    logging.warning(f"✅ PDF enviado com sucesso para {numero}")
                                     
-                                    # Salvar log de mensagem enviada com message_id
-                                    if message_id:
+                                    # Verificar se o envio foi bem-sucedido
+                                    if message_id is None:
+                                        logging.warning(f"❌ Falha ao enviar PDF para {numero}")
+                                        if historico_id:
+                                            try:
+                                                from supabase_client import atualizar_historico_cobranca
+                                                atualizar_historico_cobranca(historico_id, {
+                                                    "status": "erro",
+                                                    "erro_mensagem": "Erro ao enviar PDF via WhatsApp Cloud API (401 Authentication Error)"
+                                                })
+                                                logging.warning(f"✅ Status atualizado para erro")
+                                            except Exception as e:
+                                                logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
+                                    else:
+                                        logging.warning(f"✅ PDF enviado com sucesso para {numero}")
+                                        
+                                        # Salvar log de mensagem enviada com message_id
                                         try:
                                             from supabase_client import salvar_log_mensagem
                                             salvar_log_mensagem({
@@ -1074,18 +1099,18 @@ async def testar_cobranca():
                                             logging.info(f"💾 Log de mensagem salvo com message_id: {message_id}")
                                         except Exception as e:
                                             logging.warning(f"⚠️ Erro ao salvar log de mensagem enviada: {e}")
-                                    
-                                    # Atualizar status no histórico
-                                    logging.warning(f"🔄 Atualizando status no Supabase...")
-                                    try:
-                                        from supabase_client import atualizar_historico_cobranca
-                                        atualizar_historico_cobranca(historico_id, {
-                                            "status": "enviado",
-                                            "enviado_em": datetime.now().isoformat()
-                                        })
-                                        logging.warning(f"✅ Status atualizado para enviado")
-                                    except Exception as e:
-                                        logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
+                                        
+                                        # Atualizar status no histórico
+                                        logging.warning(f"🔄 Atualizando status no Supabase...")
+                                        try:
+                                            from supabase_client import atualizar_historico_cobranca
+                                            atualizar_historico_cobranca(historico_id, {
+                                                "status": "enviado",
+                                                "enviado_em": datetime.now().isoformat()
+                                            })
+                                            logging.warning(f"✅ Status atualizado para enviado")
+                                        except Exception as e:
+                                            logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
                                     resultados.append({
                                         "cliente": boleto.get("cliente_nome"),
                                         "telefone": numero,
