@@ -5,7 +5,12 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { RefreshCw, Building2, CheckCircle, XCircle, Clock, AlertCircle } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { 
+  RefreshCw, Building2, CheckCircle, XCircle, Clock, AlertCircle,
+  Search, Filter, CheckSquare, Square, ChevronDown, ChevronUp,
+  MapPin, Building, Calendar, TrendingUp
+} from 'lucide-react';
 
 interface Enterprise {
   id: number;
@@ -19,6 +24,7 @@ interface Enterprise {
   building_enabled_for_integration?: boolean;
   created_at: string;
   updated_at: string;
+  address?: string;
 }
 
 interface SyncLog {
@@ -39,6 +45,15 @@ export default function Enterprises() {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  
+  // Filtros e busca
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [sortField, setSortField] = useState<'name' | 'id' | 'updated'>('name');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [selectedAll, setSelectedAll] = useState(false);
+  const [selectedEnterprises, setSelectedEnterprises] = useState<Set<number>>(new Set());
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -130,6 +145,61 @@ export default function Enterprises() {
     }
   };
 
+  const toggleAllSelection = () => {
+    if (selectedAll) {
+      setSelectedEnterprises(new Set());
+    } else {
+      setSelectedEnterprises(new Set(filteredEnterprises.map(e => e.enterprise_id)));
+    }
+    setSelectedAll(!selectedAll);
+  };
+
+  const toggleEnterpriseSelection = (enterpriseId: number) => {
+    const newSelection = new Set(selectedEnterprises);
+    if (newSelection.has(enterpriseId)) {
+      newSelection.delete(enterpriseId);
+    } else {
+      newSelection.add(enterpriseId);
+    }
+    setSelectedEnterprises(newSelection);
+  };
+
+  const bulkActivate = async () => {
+    try {
+      for (const enterpriseId of selectedEnterprises) {
+        await fetch(`${API_URL}/enterprises/status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enterprise_id, ativo: true })
+        });
+      }
+      setSelectedEnterprises(new Set());
+      setSelectedAll(false);
+      await loadEnterprises();
+      setSuccess(`${selectedEnterprises.size} empreendimentos ativados`);
+    } catch (err) {
+      setError('Erro ao ativar empreendimentos');
+    }
+  };
+
+  const bulkDeactivate = async () => {
+    try {
+      for (const enterpriseId of selectedEnterprises) {
+        await fetch(`${API_URL}/enterprises/status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enterprise_id, ativo: false })
+        });
+      }
+      setSelectedEnterprises(new Set());
+      setSelectedAll(false);
+      await loadEnterprises();
+      setSuccess(`${selectedEnterprises.size} empreendimentos desativados`);
+    } catch (err) {
+      setError('Erro ao desativar empreendimentos');
+    }
+  };
+
   const getEnterpriseTypeLabel = (type: number) => {
     const types = {
       1: 'Obra e Centro de custo',
@@ -186,9 +256,45 @@ export default function Enterprises() {
     );
   };
 
+  // Filtrar e ordenar empreendimentos
+  const filteredEnterprises = enterprises
+    .filter(e => {
+      const matchesSearch = e.enterprise_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           e.enterprise_id.toString().includes(searchTerm);
+      const matchesType = filterType === 'all' || e.enterprise_type.toString() === filterType;
+      const matchesStatus = filterStatus === 'all' || 
+                           (filterStatus === 'active' && e.ativo) ||
+                           (filterStatus === 'inactive' && !e.ativo);
+      return matchesSearch && matchesType && matchesStatus;
+    })
+    .sort((a, b) => {
+      let comparison = 0;
+      if (sortField === 'name') {
+        comparison = a.enterprise_name.localeCompare(b.enterprise_name);
+      } else if (sortField === 'id') {
+        comparison = a.enterprise_id - b.enterprise_id;
+      } else if (sortField === 'updated') {
+        comparison = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
+      }
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+
+  const handleSort = (field: 'name' | 'id' | 'updated') => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const activeCount = enterprises.filter(e => e.ativo).length;
+  const totalCount = enterprises.length;
+
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-center">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Building2 className="h-8 w-8" />
@@ -208,6 +314,7 @@ export default function Enterprises() {
         </Button>
       </div>
 
+      {/* Alertas */}
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
@@ -220,6 +327,123 @@ export default function Enterprises() {
           <CheckCircle className="h-4 w-4 text-green-600" />
           <AlertDescription className="text-green-800">{success}</AlertDescription>
         </Alert>
+      )}
+
+      {/* Estatísticas */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <Building2 className="h-8 w-8 text-blue-600" />
+              <div>
+                <div className="text-2xl font-bold">{totalCount}</div>
+                <div className="text-sm text-muted-foreground">Total</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <CheckCircle className="h-8 w-8 text-green-600" />
+              <div>
+                <div className="text-2xl font-bold">{activeCount}</div>
+                <div className="text-sm text-muted-foreground">Ativos</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <XCircle className="h-8 w-8 text-red-600" />
+              <div>
+                <div className="text-2xl font-bold">{totalCount - activeCount}</div>
+                <div className="text-sm text-muted-foreground">Inativos</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <TrendingUp className="h-8 w-8 text-purple-600" />
+              <div>
+                <div className="text-2xl font-bold">
+                  {totalCount > 0 ? ((activeCount / totalCount) * 100).toFixed(0) : 0}%
+                </div>
+                <div className="text-sm text-muted-foreground">Ativação</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filtros e Busca */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Filter className="h-5 w-5" />
+            Filtros
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por nome ou ID..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="px-4 py-2 border rounded-md bg-background"
+            >
+              <option value="all">Todos os tipos</option>
+              <option value="1">Obra e Centro de custo</option>
+              <option value="2">Obra</option>
+              <option value="3">Centro de custo</option>
+              <option value="4">Centro de custo associado a obra</option>
+            </select>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="px-4 py-2 border rounded-md bg-background"
+            >
+              <option value="all">Todos os status</option>
+              <option value="active">Ativos</option>
+              <option value="inactive">Inativos</option>
+            </select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Ações em Massa */}
+      {selectedEnterprises.size > 0 && (
+        <Card className="bg-blue-50 border-blue-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckSquare className="h-5 w-5 text-blue-600" />
+                <span className="font-medium">{selectedEnterprises.size} empreendimentos selecionados</span>
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={bulkActivate} size="sm" className="bg-green-600 hover:bg-green-700">
+                  Ativar Todos
+                </Button>
+                <Button onClick={bulkDeactivate} size="sm" variant="destructive">
+                  Desativar Todos
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Logs de Sincronização */}
@@ -265,10 +489,14 @@ export default function Enterprises() {
       {/* Lista de Empreendimentos */}
       <Card>
         <CardHeader>
-          <CardTitle>Empreendimentos Cadastrados</CardTitle>
-          <CardDescription>
-            {enterprises.filter(e => e.ativo).length} de {enterprises.length} empreendimentos ativos para cobrança
-          </CardDescription>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle>Empreendimentos Cadastrados</CardTitle>
+              <CardDescription>
+                {filteredEnterprises.length} de {enterprises.length} empreendimentos {searchTerm && '(filtrados)'}
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -283,64 +511,108 @@ export default function Enterprises() {
                 </div>
               ))}
             </div>
-          ) : enterprises.length === 0 ? (
+          ) : filteredEnterprises.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Nenhum empreendimento cadastrado</p>
-              <p className="text-sm">Clique em "Atualizar Empreendimentos" para sincronizar com o Sienge</p>
+              <p>Nenhum empreendimento encontrado</p>
+              <p className="text-sm">
+                {searchTerm ? 'Tente ajustar os filtros' : 'Clique em "Atualizar Empreendimentos" para sincronizar com o Sienge'}
+              </p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {enterprises.map((enterprise) => (
-                <div 
-                  key={enterprise.id} 
-                  className={`flex items-center justify-between p-4 border rounded-lg transition-colors ${
-                    enterprise.ativo ? 'bg-green-50 border-green-200' : 'bg-gray-50'
-                  }`}
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3">
-                      <h3 className="font-semibold text-lg">{enterprise.enterprise_name}</h3>
-                      {enterprise.ativo && (
-                        <Badge className="bg-green-100 text-green-800">
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          Ativo
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                      <span>ID: {enterprise.enterprise_id}</span>
-                      <span>•</span>
-                      <span>{getEnterpriseTypeLabel(enterprise.enterprise_type)}</span>
-                      {enterprise.company_id && (
-                        <>
-                          <span>•</span>
-                          <span>Empresa: {enterprise.company_id}</span>
-                        </>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 mt-2">
-                      {getBuildingStatusLabel(enterprise.building_status)}
-                      {getCostCenterStatusLabel(enterprise.cost_center_status)}
-                      {enterprise.building_enabled_for_integration && (
-                        <Badge className="bg-blue-100 text-blue-800">
-                          Integração habilitada
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right text-sm text-muted-foreground">
-                      <div>Atualizado em</div>
-                      <div>{new Date(enterprise.updated_at).toLocaleDateString('pt-BR')}</div>
-                    </div>
-                    <Switch
-                      checked={enterprise.ativo}
-                      onCheckedChange={() => toggleEnterpriseStatus(enterprise.enterprise_id, enterprise.ativo)}
-                    />
-                  </div>
-                </div>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="p-3 text-left">
+                      <button
+                        onClick={toggleAllSelection}
+                        className="flex items-center gap-2 hover:text-blue-600"
+                      >
+                        {selectedAll ? (
+                          <CheckSquare className="h-4 w-4" />
+                        ) : (
+                          <Square className="h-4 w-4" />
+                        )}
+                      </button>
+                    </th>
+                    <th className="p-3 text-left cursor-pointer hover:text-blue-600" onClick={() => handleSort('name')}>
+                      <div className="flex items-center gap-1">
+                        Nome
+                        {sortField === 'name' && (sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />)}
+                      </div>
+                    </th>
+                    <th className="p-3 text-left cursor-pointer hover:text-blue-600" onClick={() => handleSort('id')}>
+                      <div className="flex items-center gap-1">
+                        ID
+                        {sortField === 'id' && (sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />)}
+                      </div>
+                    </th>
+                    <th className="p-3 text-left">Tipo</th>
+                    <th className="p-3 text-left">Status</th>
+                    <th className="p-3 text-left cursor-pointer hover:text-blue-600" onClick={() => handleSort('updated')}>
+                      <div className="flex items-center gap-1">
+                        Atualizado
+                        {sortField === 'updated' && (sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />)}
+                      </div>
+                    </th>
+                    <th className="p-3 text-center">Ativo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredEnterprises.map((enterprise) => (
+                    <tr 
+                      key={enterprise.id} 
+                      className={`border-b hover:bg-gray-50 transition-colors ${
+                        enterprise.ativo ? 'bg-green-50/50' : ''
+                      }`}
+                    >
+                      <td className="p-3">
+                        <button
+                          onClick={() => toggleEnterpriseSelection(enterprise.enterprise_id)}
+                          className="hover:text-blue-600"
+                        >
+                          {selectedEnterprises.has(enterprise.enterprise_id) ? (
+                            <CheckSquare className="h-4 w-4" />
+                          ) : (
+                            <Square className="h-4 w-4" />
+                          )}
+                        </button>
+                      </td>
+                      <td className="p-3">
+                        <div className="font-medium">{enterprise.enterprise_name}</div>
+                        {enterprise.address && (
+                          <div className="text-xs text-muted-foreground flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {enterprise.address.substring(0, 50)}...
+                          </div>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        <Badge variant="outline">{enterprise.enterprise_id}</Badge>
+                      </td>
+                      <td className="p-3">
+                        <Badge variant="secondary">{getEnterpriseTypeLabel(enterprise.enterprise_type)}</Badge>
+                      </td>
+                      <td className="p-3">
+                        <div className="flex flex-wrap gap-1">
+                          {getBuildingStatusLabel(enterprise.building_status)}
+                          {getCostCenterStatusLabel(enterprise.cost_center_status)}
+                        </div>
+                      </td>
+                      <td className="p-3 text-sm text-muted-foreground">
+                        {new Date(enterprise.updated_at).toLocaleDateString('pt-BR')}
+                      </td>
+                      <td className="p-3 text-center">
+                        <Switch
+                          checked={enterprise.ativo}
+                          onCheckedChange={() => toggleEnterpriseStatus(enterprise.enterprise_id, enterprise.ativo)}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </CardContent>
