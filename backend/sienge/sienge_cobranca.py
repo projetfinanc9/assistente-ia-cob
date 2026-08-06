@@ -280,9 +280,10 @@ def listar_parcelas_por_periodo_bulk(data_inicio: str, data_fim: str, cost_cente
     data = r.json()
     results = data.get("data", [])
     
-    # Salvar no cache
+    # Salvar no cache (incluir enterprise_codes na chave para invalidar quando filtro mudar)
     if results:
-        salvar_cache(cache_key, results)
+        cache_key_completo = f"{cache_key}_{'_'.join(map(str, sorted(cost_centers_ids)))}" if cost_centers_ids else cache_key
+        salvar_cache(cache_key_completo, results)
         logging.warning(f"💾 {len(results)} parcelas cacheadas via Bulk-data")
     
     return results
