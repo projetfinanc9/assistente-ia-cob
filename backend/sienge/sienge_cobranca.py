@@ -280,6 +280,21 @@ def listar_parcelas_por_periodo_bulk(data_inicio: str, data_fim: str, cost_cente
     data = r.json()
     results = data.get("data", [])
     
+    # A API Bulk-data não aplica o filtro enterpriseCode corretamente
+    # Precisamos filtrar manualmente por costCenterId nas receiptCategories
+    if cost_centers_ids and results:
+        logging.warning(f"🔬 Filtrando {len(results)} parcelas por costCenterId: {cost_centers_ids}")
+        results_filtradas = []
+        for parcela in results:
+            # Buscar costCenterId nas receiptCategories
+            receipt_categories = parcela.get("receiptsCategories", [])
+            if receipt_categories:
+                cost_center_id = receipt_categories[0].get("costCenterId")
+                if cost_center_id in cost_centers_ids:
+                    results_filtradas.append(parcela)
+        results = results_filtradas
+        logging.warning(f"✅ {len(results)} parcelas após filtro manual")
+    
     # Salvar no cache (incluir enterprise_codes na chave para invalidar quando filtro mudar)
     if results:
         cache_key_completo = f"{cache_key}_{'_'.join(map(str, sorted(cost_centers_ids)))}" if cost_centers_ids else cache_key
