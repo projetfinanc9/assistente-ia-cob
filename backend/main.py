@@ -1496,6 +1496,18 @@ async def reenviar_cobranca(historico_id: str):
 # ============================================================
 # 🌐 WEBHOOK WHATSAPP CLOUD API (VERIFICAÇÃO)
 # ============================================================
+@app.get("/debug-webhook")
+async def debug_webhook():
+    """
+    Endpoint de debug para verificar configuração do webhook
+    """
+    return {
+        "status": "debug",
+        "whatsapp_verify_token": WHATSAPP_VERIFY_TOKEN,
+        "whatsapp_phone_number_id": WHATSAPP_PHONE_NUMBER_ID,
+        "whatsapp_token_configured": bool(WHATSAPP_TOKEN)
+    }
+
 @app.get("/webhook-whatsapp")
 async def verify_whatsapp(request: Request):
     """
