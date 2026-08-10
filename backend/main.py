@@ -2357,6 +2357,45 @@ async def listar_boletos_teste():
         logging.error(f"❌ Erro ao listar boletos: {e}")
         return {"error": str(e)}
 
+@app.post("/testar-mensagem-direta")
+async def testar_mensagem_direta(request: Request):
+    """
+    Endpoint para testar envio direto de mensagem via WhatsApp Cloud API
+    Body: {"numero": "5591993808761", "mensagem": "Teste"}
+    """
+    try:
+        data = await request.json()
+        numero = data.get("numero")
+        mensagem = data.get("mensagem", "Teste de mensagem")
+
+        if not numero:
+            return {"success": False, "error": "numero é obrigatório"}
+
+        logging.warning(f"🧪 Teste mensagem direta para {numero}: {mensagem}")
+
+        if WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN:
+            # Normalizar número
+            numero_clean = re.sub(r"\D", "", numero)
+            if not numero_clean.startswith("55"):
+                numero_clean = "55" + numero_clean
+
+            # Enviar mensagem
+            message_id = send_whatsapp_message(numero_clean, mensagem)
+
+            if message_id:
+                logging.warning(f"✅ Mensagem enviada para {numero_clean}")
+                return {"success": True, "message": f"Mensagem enviada para {numero_clean}", "message_id": message_id}
+            else:
+                logging.warning(f"❌ Falha ao enviar mensagem")
+                return {"success": False, "error": "Falha ao enviar mensagem"}
+        else:
+            return {"success": False, "error": "WhatsApp não configurado"}
+
+    except Exception as e:
+        logging.error(f"❌ Erro no teste de mensagem direta: {e}")
+        return {"success": False, "error": str(e)}
+
+
 @app.post("/testar-cobranca-cliente")
 async def testar_cobranca_cliente(request: Request):
     """
