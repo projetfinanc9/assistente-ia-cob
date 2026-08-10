@@ -2379,8 +2379,45 @@ async def testar_mensagem_direta(request: Request):
             if not numero_clean.startswith("55"):
                 numero_clean = "55" + numero_clean
 
-            # Enviar mensagem
-            message_id = send_whatsapp_message(numero_clean, mensagem)
+            # Enviar mensagem direto via API
+            url = f"https://graph.facebook.com/v20.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
+            headers = {
+                "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "messaging_product": "whatsapp",
+                "to": numero_clean,
+                "type": "text",
+                "text": {
+                    "body": mensagem
+                }
+            }
+
+            response = requests.post(url, headers=headers, json=payload)
+            logging.warning(f"📤 Enviando mensagem → {numero_clean}")
+            logging.warning(f"Resposta Meta: {response.status_code} - {response.text}")
+
+            if response.status_code == 200:
+                data = response.json()
+                contacts = data.get("contacts", [])
+                if contacts:
+                    input_num = contacts[0].get("input")
+                    wa_id = contacts[0].get("wa_id")
+                    if input_num != wa_id:
+                        logging.warning(f"⚠️ Meta corrigiu numero: {input_num} → {wa_id}")
+                    else:
+                        logging.warning(f"✅ Numero nao foi corrigido: {wa_id}")
+
+                messages = data.get("messages", [])
+                if messages:
+                    message_id = messages[0].get("id")
+                    logging.warning(f"🆔 Message ID: {message_id}")
+                    logging.warning(f"✅ Mensagem enviada para {numero_clean}")
+                    return {"success": True, "message": f"Mensagem enviada para {numero_clean}", "message_id": message_id}
+            else:
+                logging.warning(f"❌ Falha ao enviar mensagem")
+                return {"success": False, "error": f"Falha ao enviar: {response.status_code}"}
 
             if message_id:
                 logging.warning(f"✅ Mensagem enviada para {numero_clean}")
