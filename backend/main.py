@@ -2387,6 +2387,8 @@ async def testar_cobranca_cliente(request: Request):
             "parcela_id": parcela_id,
             "vencimento": vencimento,
             "valor": valor,
+            "dias_antes": 0,
+            "mensagem_template": "Olá {cliente}! Segue seu boleto no valor de {valor} vencendo em {vencimento}.",
             "envio_pdf": envio_pdf,
             "pdf_url": pdf_url
         })
