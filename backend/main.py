@@ -2359,7 +2359,7 @@ async def testar_cobranca_cliente(request: Request):
         logging.warning(f"🧪 Teste manual para cliente - Título: {titulo_id}, Parcela: {parcela_id}, PDF: {envio_pdf}")
         
         from sienge.sienge_cobranca import (
-            verificar_aptidao_envio_pdf,
+            tem_boleto_apto,
             baixar_pdf_boleto,
             obter_dados_boleto_api
         )
@@ -2376,12 +2376,12 @@ async def testar_cobranca_cliente(request: Request):
         # Verificar aptidão do PDF se solicitado
         pdf_url = None
         if envio_pdf:
-            aptidao = verificar_aptidao_envio_pdf(titulo_id, parcela_id)
-            if aptidao.get("apto"):
-                pdf_url = aptidao.get("pdf_url")
+            apto, url_report = tem_boleto_apto(titulo_id, parcela_id)
+            if apto:
+                pdf_url = url_report
                 logging.warning(f"✅ PDF apto para envio: {pdf_url}")
             else:
-                logging.warning(f"⚠️ PDF não apto: {aptidao.get('motivo')}")
+                logging.warning(f"⚠️ PDF não apto")
                 envio_pdf = False
         
         # Preparar dados para envio
