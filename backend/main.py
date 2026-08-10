@@ -1748,6 +1748,23 @@ def send_whatsapp_document(to_number: str, file_content: bytes, filename: str, c
             logging.warning(f"Resposta Meta: {message_resp.status_code} - {message_resp.text}")
             
             if message_resp.status_code == 200:
+                response_data = message_resp.json()
+                logging.warning(f"📊 Resposta completa: {response_data}")
+
+                # Verificar se Meta corrigiu o numero
+                contacts = response_data.get("contacts", [])
+                if contacts:
+                    input_number = contacts[0].get("input")
+                    wa_id = contacts[0].get("wa_id")
+                    if input_number != wa_id:
+                        logging.warning(f"⚠️ Meta corrigiu numero: {input_number} → {wa_id}")
+                    else:
+                        logging.warning(f"✅ Numero nao foi corrigido: {wa_id}")
+
+                messages = response_data.get("messages", [])
+                if messages:
+                    message_id = messages[0].get("id")
+                    logging.warning(f"🆔 Message ID: {message_id}")
                 break
             elif message_resp.status_code == 429:
                 wait_time = 2 ** tentativa  # Backoff exponencial: 2, 4, 8, 16, 32 segundos
