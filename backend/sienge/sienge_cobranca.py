@@ -625,7 +625,7 @@ def gerar_mensagem_cobranca(boleto: Dict) -> str:
     valor = boleto["valor"]
     dias = boleto["dias_antes"]
     vencimento = boleto["vencimento"]
-    template = boleto.get("mensagem_template", "Olá {cliente}, seu boleto vence em {dias} dias. Valor: R$ {valor}")
+    template = boleto.get("mensagem_template", "Olá {cliente}, seu boleto {dias}. Valor: R$ {valor}")
     
     # Formatar valor
     try:
@@ -633,13 +633,16 @@ def gerar_mensagem_cobranca(boleto: Dict) -> str:
     except:
         valor_formatado = f"R$ {valor}"
     
-    # Formatar dias para texto amigável (apenas número absoluto)
+    # Formatar dias para texto amigável
     if dias < 0:
-        dias_texto = f"{abs(dias)}"
+        # Antes do vencimento (ex: -3 = falta 3 dias)
+        dias_texto = f"falta {abs(dias)} dias"
     elif dias > 0:
-        dias_texto = f"{dias}"
+        # Depois do vencimento (ex: 3 = venceu há 3 dias)
+        dias_texto = f"venceu há {dias} dias"
     else:
-        dias_texto = "hoje"
+        # No dia do vencimento
+        dias_texto = "vence hoje"
     
     # Substituir variáveis no template
     mensagem = template.replace("{cliente}", cliente)
