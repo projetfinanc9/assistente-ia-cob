@@ -289,6 +289,62 @@ def listar_parcelas_por_periodo_bulk(data_inicio: str, data_fim: str, cost_cente
     return results
 
 
+def obter_dados_boleto_api(titulo_id: int, parcela_id: int) -> Dict:
+    """
+    Busca dados completos de um boleto específico (título e parcela).
+    Retorna dicionário com informações do cliente e do boleto.
+    """
+    from datetime import datetime, timedelta
+
+    # Buscar parcela específica via API de parcelas
+    url = f"{BASE_URL}/installments"
+    params = {"billReceivableId": titulo_id}
+
+    try:
+        r = requests.get(url, headers=json_headers, params=params, timeout=30)
+        if r.status_code == 200:
+            data = r.json()
+            parcelas = data.get("results", [])
+
+            # Encontrar a parcela específica
+            for parcela in parcelas:
+                if parcela.get("installmentId") == parcela_id:
+                    # Buscar dados do cliente
+                    cliente_id = parcela.get("customerId")
+                    cliente_nome = parcela.get("customerName", "")
+                    cliente_telefone = ""
+
+                    # Buscar telefone do cliente via API de clientes
+                    if cliente_id:
+                        try:
+                            url_cliente = f"{BASE_URL}/customers/{cliente_id}"
+                            r_cliente = requests.get(url_cliente, headers=json_headers, timeout=30)
+                            if r_cliente.status_code == 200:
+                                cliente_data = r_cliente.json()
+                                cliente_telefone = cliente_data.get("mobilePhone", cliente_data.get("phone", ""))
+                        except Exception as e:
+                            logging.warning(f"⚠️ Erro ao buscar telefone do cliente {cliente_id}: {e}")
+
+                    return {
+                        "cliente_id": cliente_id,
+                        "cliente_nome": cliente_nome,
+                        "cliente_telefone": cliente_telefone,
+                        "titulo_id": titulo_id,
+                        "parcela_id": parcela_id,
+                        "vencimento": parcela.get("dueDate"),
+                        "valor": parcela.get("value", 0),
+                        "saldo": parcela.get("balance", 0),
+                        "status": parcela.get("status", "")
+                    }
+
+        logging.warning(f"⚠️ Parcela {parcela_id} não encontrada no título {titulo_id}")
+        return None
+
+    except Exception as e:
+        logging.error(f"❌ Erro ao buscar dados do boleto ({titulo_id}/{parcela_id}): {e}")
+        return None
+
+
 def boleto_existe(titulo_id: int, parcela_id: int) -> bool:
     """Verifica se existe segunda via real para essa parcela."""
     url = f"{BASE_URL}/payment-slip-notification"
