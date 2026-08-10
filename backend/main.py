@@ -2344,7 +2344,7 @@ async def listar_boletos_teste():
 async def testar_cobranca_cliente(request: Request):
     """
     Endpoint para testar cobrança para um cliente específico
-    Body: {"titulo_id": 123, "parcela_id": 456, "envio_pdf": true, "telefone_manual": "559187644309"}
+    Body: {"titulo_id": 123, "parcela_id": 456, "envio_pdf": true, "telefone_manual": "5591993808761"}
     """
     try:
         data = await request.json()
@@ -2357,22 +2357,10 @@ async def testar_cobranca_cliente(request: Request):
             return {"success": False, "error": "titulo_id e parcela_id são obrigatórios"}
 
         logging.warning(f"🧪 Teste manual para cliente - Título: {titulo_id}, Parcela: {parcela_id}, PDF: {envio_pdf}")
-        
-        from sienge.sienge_cobranca import (
-            tem_boleto_apto,
-            baixar_pdf_boleto,
-            obter_dados_boleto_api
-        )
+
+        from sienge.sienge_cobranca import tem_boleto_apto, baixar_pdf_boleto, gerar_mensagem_cobranca
         from supabase_client import salvar_historico_cobranca, atualizar_historico_cobranca
-        
-        # Buscar dados do boleto
-        boleto = obter_dados_boleto_api(titulo_id, parcela_id)
-        
-        if not boleto:
-            return {"success": False, "error": f"Boleto não encontrado: título {titulo_id}, parcela {parcela_id}"}
-        
-        logging.warning(f"📋 Dados do boleto: {boleto}")
-        
+
         # Verificar aptidão do PDF se solicitado
         pdf_url = None
         if envio_pdf:
@@ -2382,19 +2370,17 @@ async def testar_cobranca_cliente(request: Request):
                 logging.warning(f"✅ PDF apto para envio: {pdf_url}")
             else:
                 logging.warning(f"⚠️ PDF não apto")
-                envio_pdf = False
-        
-        # Preparar dados para envio
-        cliente_id = boleto.get("cliente_id")
-        cliente_nome = boleto.get("cliente_nome")
-        cliente_telefone = boleto.get("cliente_telefone")
-        vencimento = boleto.get("vencimento")
-        valor = boleto.get("valor")
-        
+                return {"success": False, "error": "PDF não apto para envio"}
+
+        # Dados do boleto (simplificado - usando título e parcela)
+        cliente_nome = "Cliente Teste"
+        cliente_telefone = telefone_manual if telefone_manual else "5591999999999"
+        vencimento = "2026-08-11"
+        valor = 10.0
+
         # Gerar mensagem
-        from sienge.sienge_cobranca import gerar_mensagem_cobranca
         mensagem = gerar_mensagem_cobranca({
-            "cliente_id": cliente_id,
+            "cliente_id": 999,
             "cliente_nome": cliente_nome,
             "cliente_telefone": cliente_telefone,
             "titulo_id": titulo_id,
@@ -2404,46 +2390,39 @@ async def testar_cobranca_cliente(request: Request):
             "envio_pdf": envio_pdf,
             "pdf_url": pdf_url
         })
-        
+
         logging.warning(f"💬 Mensagem gerada: {mensagem}")
-        
+
         # Salvar no histórico
         dados_historico = {
-            "cliente_id": cliente_id,
+            "cliente_id": 999,
             "cliente_nome": cliente_nome,
             "cliente_telefone": cliente_telefone,
             "titulo_id": titulo_id,
             "parcela_id": parcela_id,
             "vencimento": vencimento,
             "valor": valor,
-            "dias_antes": 0,  # Teste manual
+            "dias_antes": 0,
             "mensagem_template": "manual_test",
             "mensagem_enviada": mensagem,
             "status": "pendente",
             "tipo_envio": "pdf" if envio_pdf else "texto"
         }
-        
+
         historico_salvo = salvar_historico_cobranca(dados_historico)
         historico_id = historico_salvo.get("id") if isinstance(historico_salvo, dict) else historico_salvo
         logging.warning(f"💾 Histórico salvo: {historico_id}")
-        
+
         # Enviar WhatsApp
-        if WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN and cliente_telefone:
-            # Usar telefone manual se fornecido
-            if telefone_manual:
-                numero = re.sub(r"\D", "", telefone_manual)
-                logging.warning(f"📱 Usando telefone manual: {numero}")
-            else:
-                numero = re.sub(r"\D", "", cliente_telefone)
+        if WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN:
+            numero = re.sub(r"\D", "", cliente_telefone)
+            logging.warning(f"📱 Enviando para: {numero}")
 
             # Normalizar número
             if not numero.startswith("55"):
                 numero = "55" + numero
 
-            if len(numero) == 12:
-                ddd = numero[:4]
-                numero = ddd + "9" + numero[4:]
-            elif len(numero) != 13:
+            if len(numero) != 13:
                 erro_msg = f"Número inválido: {numero}"
                 logging.warning(f"⚠️ {erro_msg}")
                 if historico_id:
@@ -2452,15 +2431,14 @@ async def testar_cobranca_cliente(request: Request):
                         "erro_mensagem": erro_msg
                     })
                 return {"success": False, "error": erro_msg}
-            
+
             # Enviar
             if envio_pdf and pdf_url:
-                # Baixar e enviar PDF
                 pdf_content = baixar_pdf_boleto(titulo_id, parcela_id, pdf_url)
                 if pdf_content:
                     filename = f"boleto_{titulo_id}_{parcela_id}.pdf"
                     message_id = send_whatsapp_document(numero, pdf_content, filename, mensagem)
-                    
+
                     if message_id:
                         logging.warning(f"✅ PDF enviado para {numero}")
                         if historico_id:
@@ -2475,9 +2453,8 @@ async def testar_cobranca_cliente(request: Request):
                             })
                         return {"success": False, "error": "Falha ao enviar PDF"}
             else:
-                # Enviar texto
                 message_id = send_whatsapp_message(numero, mensagem)
-                
+
                 if message_id:
                     logging.warning(f"✅ Mensagem enviada para {numero}")
                     if historico_id:
@@ -2490,6 +2467,7 @@ async def testar_cobranca_cliente(request: Request):
                             "status": "erro",
                             "erro_mensagem": "Erro ao enviar mensagem via WhatsApp Cloud API"
                         })
+                    return {"success": False, "error": "Falha ao enviar mensagem"}
                     return {"success": False, "error": "Falha ao enviar mensagem"}
         else:
             return {"success": False, "error": "WhatsApp não configurado ou cliente sem telefone"}
