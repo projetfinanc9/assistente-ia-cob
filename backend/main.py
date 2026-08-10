@@ -1518,11 +1518,19 @@ async def verify_whatsapp(request: Request):
     token = params.get("hub.verify_token")
     challenge = params.get("hub.challenge")
 
+    # Log para debug - mostrar parâmetros recebidos
+    logging.info(f"📡 Webhook GET - params: mode={mode}, token={token}, challenge={challenge}")
+
+    # Se não tiver parâmetros (health check da Meta), retornar 200 OK
+    if not mode and not token:
+        logging.info("✅ Webhook health check (sem parâmetros) - OK")
+        return PlainTextResponse("OK", status_code=200)
+
     if mode == "subscribe" and token == WHATSAPP_VERIFY_TOKEN:
         logging.info("✅ Webhook WhatsApp verificado pelo Meta.")
         return PlainTextResponse(challenge or "")
     else:
-        logging.warning("⚠️ Webhook WhatsApp verificação falhou.")
+        logging.warning(f"⚠️ Webhook WhatsApp verificação falhou. Token esperado: {WHATSAPP_VERIFY_TOKEN}, Token recebido: {token}")
         return PlainTextResponse("Verification failed", status_code=403)
 
 @app.get("/webhook-cobranca")
