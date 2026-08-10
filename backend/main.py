@@ -2306,6 +2306,198 @@ async def testar_cobranca():
         logging.error(f"❌ Erro no teste de cobrança: {e}")
         return {"success": False, "error": str(e)}
 
+@app.get("/listar-boletos-teste")
+async def listar_boletos_teste():
+    """
+    Lista boletos disponíveis para teste (limitado a 10)
+    Útil para escolher IDs para testar cobrança manual
+    """
+    try:
+        from sienge.sienge_cobranca import verificar_boletos_vencendo
+        boletos = verificar_boletos_vencendo()
+        
+        # Limitar a 10 para não sobrecarregar
+        boletos_limitados = boletos[:10]
+        
+        boletos_simplificados = []
+        for boleto in boletos_limitados:
+            boletos_simplificados.append({
+                "titulo_id": boleto.get("titulo_id"),
+                "parcela_id": boleto.get("parcela_id"),
+                "cliente_nome": boleto.get("cliente_nome"),
+                "cliente_telefone": boleto.get("cliente_telefone"),
+                "vencimento": boleto.get("vencimento"),
+                "valor": boleto.get("valor"),
+                "envio_pdf": boleto.get("envio_pdf")
+            })
+        
+        return {
+            "total": len(boletos),
+            "mostrando": len(boletos_simplificados),
+            "boletos": boletos_simplificados
+        }
+    except Exception as e:
+        logging.error(f"❌ Erro ao listar boletos: {e}")
+        return {"error": str(e)}
+
+@app.post("/testar-cobranca-cliente")
+async def testar_cobranca_cliente(request: Request):
+    """
+    Endpoint para testar cobrança para um cliente específico
+    Body: {"titulo_id": 123, "parcela_id": 456, "envio_pdf": true, "telefone_manual": "559187644309"}
+    """
+    try:
+        data = await request.json()
+        titulo_id = data.get("titulo_id")
+        parcela_id = data.get("parcela_id")
+        envio_pdf = data.get("envio_pdf", True)
+        telefone_manual = data.get("telefone_manual")
+
+        if not titulo_id or not parcela_id:
+            return {"success": False, "error": "titulo_id e parcela_id são obrigatórios"}
+
+        logging.warning(f"🧪 Teste manual para cliente - Título: {titulo_id}, Parcela: {parcela_id}, PDF: {envio_pdf}")
+        
+        from sienge.sienge_cobranca import (
+            verificar_aptidao_envio_pdf,
+            baixar_pdf_boleto,
+            obter_dados_boleto_api
+        )
+        from supabase_client import salvar_historico_cobranca, atualizar_historico_cobranca
+        
+        # Buscar dados do boleto
+        boleto = obter_dados_boleto_api(titulo_id, parcela_id)
+        
+        if not boleto:
+            return {"success": False, "error": f"Boleto não encontrado: título {titulo_id}, parcela {parcela_id}"}
+        
+        logging.warning(f"📋 Dados do boleto: {boleto}")
+        
+        # Verificar aptidão do PDF se solicitado
+        pdf_url = None
+        if envio_pdf:
+            aptidao = verificar_aptidao_envio_pdf(titulo_id, parcela_id)
+            if aptidao.get("apto"):
+                pdf_url = aptidao.get("pdf_url")
+                logging.warning(f"✅ PDF apto para envio: {pdf_url}")
+            else:
+                logging.warning(f"⚠️ PDF não apto: {aptidao.get('motivo')}")
+                envio_pdf = False
+        
+        # Preparar dados para envio
+        cliente_id = boleto.get("cliente_id")
+        cliente_nome = boleto.get("cliente_nome")
+        cliente_telefone = boleto.get("cliente_telefone")
+        vencimento = boleto.get("vencimento")
+        valor = boleto.get("valor")
+        
+        # Gerar mensagem
+        from sienge.sienge_cobranca import gerar_mensagem_cobranca
+        mensagem = gerar_mensagem_cobranca({
+            "cliente_id": cliente_id,
+            "cliente_nome": cliente_nome,
+            "cliente_telefone": cliente_telefone,
+            "titulo_id": titulo_id,
+            "parcela_id": parcela_id,
+            "vencimento": vencimento,
+            "valor": valor,
+            "envio_pdf": envio_pdf,
+            "pdf_url": pdf_url
+        })
+        
+        logging.warning(f"💬 Mensagem gerada: {mensagem}")
+        
+        # Salvar no histórico
+        dados_historico = {
+            "cliente_id": cliente_id,
+            "cliente_nome": cliente_nome,
+            "cliente_telefone": cliente_telefone,
+            "titulo_id": titulo_id,
+            "parcela_id": parcela_id,
+            "vencimento": vencimento,
+            "valor": valor,
+            "dias_antes": 0,  # Teste manual
+            "mensagem_template": "manual_test",
+            "mensagem_enviada": mensagem,
+            "status": "pendente",
+            "tipo_envio": "pdf" if envio_pdf else "texto"
+        }
+        
+        historico_salvo = salvar_historico_cobranca(dados_historico)
+        historico_id = historico_salvo.get("id") if isinstance(historico_salvo, dict) else historico_salvo
+        logging.warning(f"💾 Histórico salvo: {historico_id}")
+        
+        # Enviar WhatsApp
+        if WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN and cliente_telefone:
+            # Usar telefone manual se fornecido
+            if telefone_manual:
+                numero = re.sub(r"\D", "", telefone_manual)
+                logging.warning(f"📱 Usando telefone manual: {numero}")
+            else:
+                numero = re.sub(r"\D", "", cliente_telefone)
+
+            # Normalizar número
+            if not numero.startswith("55"):
+                numero = "55" + numero
+
+            if len(numero) == 12:
+                ddd = numero[:4]
+                numero = ddd + "9" + numero[4:]
+            elif len(numero) != 13:
+                erro_msg = f"Número inválido: {numero}"
+                logging.warning(f"⚠️ {erro_msg}")
+                if historico_id:
+                    atualizar_historico_cobranca(historico_id, {
+                        "status": "erro",
+                        "erro_mensagem": erro_msg
+                    })
+                return {"success": False, "error": erro_msg}
+            
+            # Enviar
+            if envio_pdf and pdf_url:
+                # Baixar e enviar PDF
+                pdf_content = baixar_pdf_boleto(titulo_id, parcela_id, pdf_url)
+                if pdf_content:
+                    filename = f"boleto_{titulo_id}_{parcela_id}.pdf"
+                    message_id = send_whatsapp_document(numero, pdf_content, filename, mensagem)
+                    
+                    if message_id:
+                        logging.warning(f"✅ PDF enviado para {numero}")
+                        if historico_id:
+                            atualizar_historico_cobranca(historico_id, {"status": "enviado"})
+                        return {"success": True, "message": f"PDF enviado para {numero}", "message_id": message_id}
+                    else:
+                        logging.warning(f"❌ Falha ao enviar PDF")
+                        if historico_id:
+                            atualizar_historico_cobranca(historico_id, {
+                                "status": "erro",
+                                "erro_mensagem": "Erro ao enviar PDF via WhatsApp Cloud API"
+                            })
+                        return {"success": False, "error": "Falha ao enviar PDF"}
+            else:
+                # Enviar texto
+                message_id = send_whatsapp_message(numero, mensagem)
+                
+                if message_id:
+                    logging.warning(f"✅ Mensagem enviada para {numero}")
+                    if historico_id:
+                        atualizar_historico_cobranca(historico_id, {"status": "enviado"})
+                    return {"success": True, "message": f"Mensagem enviada para {numero}", "message_id": message_id}
+                else:
+                    logging.warning(f"❌ Falha ao enviar mensagem")
+                    if historico_id:
+                        atualizar_historico_cobranca(historico_id, {
+                            "status": "erro",
+                            "erro_mensagem": "Erro ao enviar mensagem via WhatsApp Cloud API"
+                        })
+                    return {"success": False, "error": "Falha ao enviar mensagem"}
+        else:
+            return {"success": False, "error": "WhatsApp não configurado ou cliente sem telefone"}
+            
+    except Exception as e:
+        logging.error(f"❌ Erro no teste de cobrança cliente: {e}")
+        return {"success": False, "error": str(e)}
+
 @app.post("/limpar-cache")
 async def limpar_cache():
     """Endpoint para limpar todo o cache"""
