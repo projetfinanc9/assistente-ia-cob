@@ -626,13 +626,24 @@ def gerar_mensagem_cobranca(boleto: Dict) -> str:
     dias = boleto["dias_antes"]
     vencimento = boleto["vencimento"]
     template = boleto.get("mensagem_template", "Olá {cliente}, seu boleto {dias}. Valor: R$ {valor}")
-    
+
     # Formatar valor
     try:
         valor_formatado = f"R$ {float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except:
         valor_formatado = f"R$ {valor}"
-    
+
+    # Formatar data de YYYY-MM-DD para DD/MM/YYYY
+    try:
+        from datetime import datetime
+        if isinstance(vencimento, str) and "-" in vencimento:
+            data_obj = datetime.strptime(vencimento, "%Y-%m-%d")
+            vencimento_formatado = data_obj.strftime("%d/%m/%Y")
+        else:
+            vencimento_formatado = vencimento
+    except:
+        vencimento_formatado = vencimento
+
     # Formatar dias para texto amigável
     if dias < 0:
         # Antes do vencimento (ex: -3 = falta 3 dias)
@@ -643,12 +654,12 @@ def gerar_mensagem_cobranca(boleto: Dict) -> str:
     else:
         # No dia do vencimento
         dias_texto = "vence hoje"
-    
+
     # Substituir variáveis no template
     mensagem = template.replace("{cliente}", cliente)
     mensagem = mensagem.replace("{valor}", valor_formatado)
     mensagem = mensagem.replace("{dias}", dias_texto)
-    mensagem = mensagem.replace("{vencimento}", vencimento)
+    mensagem = mensagem.replace("{vencimento}", vencimento_formatado)
     
     # Manter compatibilidade com enviar_segunda_via (legado)
     if boleto.get("enviar_segunda_via"):
