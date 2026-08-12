@@ -93,7 +93,7 @@ def fazer_upload_pdf(pdf_content: bytes, filename: str) -> Optional[str]:
         logging.error(f"Erro ao fazer upload do PDF: {e}")
         return None
 
-def send_whatsapp_template_message(numero: str, boleto: dict, template_name: str = "auto_pay_reminder_3") -> Optional[str]:
+def send_whatsapp_template_message(numero: str, boleto: dict, template_name: str = "lembrete_de_vencimento") -> Optional[str]:
     """
     Envia mensagem usando template aprovado da Meta
     
