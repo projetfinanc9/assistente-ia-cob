@@ -1263,19 +1263,26 @@ async def invalidar_cache_api(cache_key: str = "lista_clientes"):
 
 
 @app.post("/atualizar-cliente-sienge")
-async def atualizar_cliente_sienge(cliente_id: str = None, cliente_nome: str = None, historico_id: str = None):
+async def atualizar_cliente_sienge(request: Request):
     """
     Atualiza dados de um cliente específico do Sienge
     Invalida o cache e busca dados atualizados
+    Body: {"cliente_id": 123, "cliente_nome": "nome", "historico_id": "uuid"}
     Aceita cliente_id ou cliente_nome como parâmetro
     Se historico_id for fornecido, atualiza o registro no Supabase
     """
-    logging.warning(f"🔄 Iniciando atualização do cliente - ID: {cliente_id}, Nome: {cliente_nome}, Histórico: {historico_id}")
     try:
         from sienge.sienge_cobranca import invalidar_cache
         from sienge.sienge_config import BASE_URL, json_headers
         from supabase_client import atualizar_historico_cobranca
         import requests
+
+        data = await request.json()
+        cliente_id = data.get("cliente_id")
+        cliente_nome = data.get("cliente_nome")
+        historico_id = data.get("historico_id")
+
+        logging.warning(f"🔄 Iniciando atualização do cliente - ID: {cliente_id}, Nome: {cliente_nome}, Histórico: {historico_id}")
 
         # Invalidar cache de clientes
         logging.warning(f"🗑️ Invalidando cache de clientes...")
@@ -1325,7 +1332,15 @@ async def atualizar_cliente_sienge(cliente_id: str = None, cliente_nome: str = N
                     if not telefone:
                         telefone = phones[0].get("number")
 
-                logging.warning(f"📱 Telefone extraído: {telefone}")
+                # Normalizar telefone (remover formatação e adicionar código do país)
+                if telefone:
+                    import re
+                    telefone_limpo = re.sub(r"\D", "", telefone)  # Remove todos os não-dígitos
+                    if not telefone_limpo.startswith("55"):
+                        telefone_limpo = "55" + telefone_limpo
+                    telefone = telefone_limpo
+
+                logging.warning(f"📱 Telefone extraído e normalizado: {telefone}")
 
                 # Se historico_id foi fornecido, atualizar o registro no Supabase
                 if historico_id:
