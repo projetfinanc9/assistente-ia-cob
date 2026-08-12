@@ -26,6 +26,10 @@ def formatar_dias_texto(dias: int) -> str:
     else:
         return "vence hoje"
 
+def formatar_dias_numero(dias: int) -> str:
+    """Retorna apenas o número absoluto de dias (para templates que já têm o texto)"""
+    return str(abs(dias))
+
 def formatar_valor(valor) -> str:
     """Formata o valor monetário"""
     try:
@@ -136,7 +140,11 @@ def send_whatsapp_template_message(numero: str, boleto: dict, template_name: str
     # Formatar parametros
     cliente_texto = cliente
     valor_texto = formatar_valor(valor)
-    dias_texto = formatar_dias_texto(dias)
+    # Para template lembrete_de_vencimento, usar apenas o numero (template ja tem o texto)
+    if template_name == "lembrete_de_vencimento":
+        dias_texto = formatar_dias_numero(dias)
+    else:
+        dias_texto = formatar_dias_texto(dias)
     vencimento_texto = formatar_vencimento(vencimento)
     
     logging.warning(f"Enviando template {template_name} para {numero}")
