@@ -1439,10 +1439,10 @@ async def atualizar_telefone_cliente(request: Request):
         # Se cliente_id fornecido, atualizar todos os históricos desse cliente
         if cliente_id:
             logging.warning(f"💾 Atualizando todos os históricos do cliente {cliente_id} no Supabase...")
-            from supabase_client import buscar_historico_cobranca
+            from supabase_client import buscar_historico_cobrancas
 
             # Buscar todos os históricos desse cliente
-            historicos = buscar_historico_cobranca({"cliente_id": cliente_id})
+            historicos = buscar_historico_cobrancas({"cliente_id": cliente_id})
 
             if historicos:
                 for item in historicos:
