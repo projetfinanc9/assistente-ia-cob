@@ -1276,11 +1276,11 @@ async def atualizar_cliente_sienge(cliente_id: str = None, cliente_nome: str = N
         from sienge.sienge_config import BASE_URL, json_headers
         from supabase_client import atualizar_historico_cobranca
         import requests
-        
+
         # Invalidar cache de clientes
         logging.warning(f"🗑️ Invalidando cache de clientes...")
         invalidar_cache("lista_clientes")
-        
+
         # Buscar dados atualizados do cliente
         if cliente_id:
             logging.warning(f"📡 Buscando dados do cliente por ID {cliente_id} no Sienge...")
@@ -1290,11 +1290,11 @@ async def atualizar_cliente_sienge(cliente_id: str = None, cliente_nome: str = N
             url = f"{BASE_URL}/customers?name={cliente_nome}"
         else:
             return {"status": "error", "message": "cliente_id ou cliente_nome é obrigatório"}
-        
+
         logging.warning(f"📡 URL: {url}")
         r = requests.get(url, headers=json_headers, timeout=30)
         logging.warning(f"📡 Status code: {r.status_code}")
-        
+
         if r.status_code == 200:
             data = r.json()
             # Se busca por nome, pegar o primeiro resultado
@@ -1302,7 +1302,7 @@ async def atualizar_cliente_sienge(cliente_id: str = None, cliente_nome: str = N
                 cliente_data = data["results"][0] if data["results"] else None
             else:
                 cliente_data = data
-            
+
             if cliente_data:
                 logging.warning(f"✅ Dados do cliente atualizados: {cliente_data}")
                 # Se busca por nome, usar o ID retornado para buscar novamente os dados atualizados
@@ -1313,7 +1313,7 @@ async def atualizar_cliente_sienge(cliente_id: str = None, cliente_nome: str = N
                     if r_id.status_code == 200:
                         cliente_data = r_id.json()
                         logging.warning(f"✅ Dados do cliente atualizados por ID: {cliente_data}")
-                
+
                 # Extrair telefone dos dados do cliente
                 telefone = None
                 phones = cliente_data.get("phones", [])
@@ -1324,9 +1324,9 @@ async def atualizar_cliente_sienge(cliente_id: str = None, cliente_nome: str = N
                             break
                     if not telefone:
                         telefone = phones[0].get("number")
-                
+
                 logging.warning(f"📱 Telefone extraído: {telefone}")
-                
+
                 # Se historico_id foi fornecido, atualizar o registro no Supabase
                 if historico_id:
                     logging.warning(f"💾 Atualizando histórico {historico_id} no Supabase...")
@@ -1336,7 +1336,7 @@ async def atualizar_cliente_sienge(cliente_id: str = None, cliente_nome: str = N
                     }
                     atualizar_historico_cobranca(historico_id, dados_atualizacao)
                     logging.warning(f"✅ Histórico atualizado no Supabase")
-                
+
                 return {
                     "status": "success",
                     "message": "Dados do cliente atualizados com sucesso",
@@ -1353,6 +1353,65 @@ async def atualizar_cliente_sienge(cliente_id: str = None, cliente_nome: str = N
             }
     except Exception as e:
         logging.error(f"❌ Erro ao atualizar cliente do Sienge: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/atualizar-telefone-cliente")
+async def atualizar_telefone_cliente(request: Request):
+    """
+    Atualiza o telefone de um cliente no Supabase (útil quando cliente não tem telefone no Sienge ou telefone mudou)
+    Body: {"cliente_id": 123, "novo_telefone": "5591993808761"} ou {"historico_id": "uuid", "novo_telefone": "5591993808761"}
+    """
+    try:
+        from supabase_client import atualizar_historico_cobranca
+
+        data = await request.json()
+        novo_telefone = data.get("novo_telefone")
+        cliente_id = data.get("cliente_id")
+        historico_id = data.get("historico_id")
+
+        if not novo_telefone:
+            return {"status": "error", "message": "novo_telefone é obrigatório"}
+
+        if not cliente_id and not historico_id:
+            return {"status": "error", "message": "cliente_id ou historico_id é obrigatório"}
+
+        logging.warning(f"📱 Atualizando telefone - Cliente ID: {cliente_id}, Histórico: {historico_id}, Novo Telefone: {novo_telefone}")
+
+        # Se historico_id fornecido, atualizar apenas esse registro
+        if historico_id:
+            logging.warning(f"💾 Atualizando histórico {historico_id} no Supabase...")
+            atualizar_historico_cobranca(historico_id, {"cliente_telefone": novo_telefone})
+            logging.warning(f"✅ Telefone atualizado no histórico")
+            return {
+                "status": "success",
+                "message": "Telefone atualizado no histórico com sucesso",
+                "historico_id": historico_id
+            }
+
+        # Se cliente_id fornecido, atualizar todos os históricos desse cliente
+        if cliente_id:
+            logging.warning(f"💾 Atualizando todos os históricos do cliente {cliente_id} no Supabase...")
+            from supabase_client import supabase
+
+            # Buscar todos os históricos desse cliente
+            response = supabase.table("cobranca_historico").select("*").eq("cliente_id", cliente_id).execute()
+
+            if response.data:
+                for item in response.data:
+                    atualizar_historico_cobranca(item["id"], {"cliente_telefone": novo_telefone})
+                logging.warning(f"✅ {len(response.data)} históricos atualizados")
+                return {
+                    "status": "success",
+                    "message": f"Telefone atualizado em {len(response.data)} históricos",
+                    "cliente_id": cliente_id,
+                    "total_atualizado": len(response.data)
+                }
+            else:
+                return {"status": "error", "message": "Nenhum histórico encontrado para este cliente"}
+
+    except Exception as e:
+        logging.error(f"❌ Erro ao atualizar telefone do cliente: {e}")
         return {"status": "error", "message": str(e)}
 
 
