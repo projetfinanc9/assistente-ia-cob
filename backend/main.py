@@ -1395,7 +1395,7 @@ async def atualizar_telefone_cliente(request: Request):
             from supabase_client import supabase
 
             # Buscar todos os históricos desse cliente
-            response = supabase.table("cobranca_historico").select("*").eq("cliente_id", cliente_id).execute()
+            response = supabase.table("historico_cobrancas").select("*").eq("cliente_id", cliente_id).execute()
 
             if response.data:
                 for item in response.data:
