@@ -1359,16 +1359,20 @@ async def atualizar_cliente_sienge(cliente_id: str = None, cliente_nome: str = N
 @app.post("/atualizar-telefone-cliente")
 async def atualizar_telefone_cliente(request: Request):
     """
-    Atualiza o telefone de um cliente no Supabase (útil quando cliente não tem telefone no Sienge ou telefone mudou)
+    Atualiza o telefone de um cliente no Sienge e no Supabase
     Body: {"cliente_id": 123, "novo_telefone": "5591993808761"} ou {"historico_id": "uuid", "novo_telefone": "5591993808761"}
     """
     try:
         from supabase_client import atualizar_historico_cobranca
+        from sienge.sienge_config import BASE_URL, json_headers
+        from sienge.sienge_cobranca import invalidar_cache
+        import requests
 
         data = await request.json()
         novo_telefone = data.get("novo_telefone")
         cliente_id = data.get("cliente_id")
         historico_id = data.get("historico_id")
+        atualizar_sienge = data.get("atualizar_sienge", True)
 
         if not novo_telefone:
             return {"status": "error", "message": "novo_telefone é obrigatório"}
@@ -1377,6 +1381,49 @@ async def atualizar_telefone_cliente(request: Request):
             return {"status": "error", "message": "cliente_id ou historico_id é obrigatório"}
 
         logging.warning(f"📱 Atualizando telefone - Cliente ID: {cliente_id}, Histórico: {historico_id}, Novo Telefone: {novo_telefone}")
+
+        # Se cliente_id fornecido e atualizar_sienge=True, atualizar no Sienge
+        if cliente_id and atualizar_sienge:
+            logging.warning(f"📡 Atualizando telefone no Sienge para cliente {cliente_id}...")
+
+            # Buscar dados atuais do cliente para manter outros telefones
+            cliente_url = f"{BASE_URL}/customers/{cliente_id}"
+            r = requests.get(cliente_url, headers=json_headers, timeout=30)
+
+            if r.status_code == 200:
+                cliente_data = r.json()
+                phones = cliente_data.get("phones", [])
+
+                # Criar array de telefones com o novo telefone
+                phones_payload = []
+                if phones:
+                    # Manter telefones existentes e adicionar o novo
+                    for phone in phones:
+                        phones_payload.append({
+                            "number": phone.get("number"),
+                            "main": phone.get("main", False),
+                            "type": phone.get("type", "cellphone")
+                        })
+
+                # Adicionar novo telefone como principal
+                phones_payload.append({
+                    "number": novo_telefone,
+                    "main": True,
+                    "type": "cellphone"
+                })
+
+                # Atualizar telefones no Sienge
+                phones_url = f"{BASE_URL}/customers/{cliente_id}/phones"
+                r_update = requests.put(phones_url, json=phones_payload, headers=json_headers, timeout=30)
+
+                if r_update.status_code == 204:
+                    logging.warning(f"✅ Telefone atualizado no Sienge")
+                    # Invalidar cache
+                    invalidar_cache("lista_clientes")
+                else:
+                    logging.warning(f"⚠️ Erro ao atualizar telefone no Sienge: {r_update.status_code}")
+            else:
+                logging.warning(f"⚠️ Erro ao buscar cliente no Sienge: {r.status_code}")
 
         # Se historico_id fornecido, atualizar apenas esse registro
         if historico_id:
@@ -1392,20 +1439,20 @@ async def atualizar_telefone_cliente(request: Request):
         # Se cliente_id fornecido, atualizar todos os históricos desse cliente
         if cliente_id:
             logging.warning(f"💾 Atualizando todos os históricos do cliente {cliente_id} no Supabase...")
-            from supabase_client import supabase
+            from supabase_client import buscar_historico_cobranca
 
             # Buscar todos os históricos desse cliente
-            response = supabase.table("historico_cobrancas").select("*").eq("cliente_id", cliente_id).execute()
+            historicos = buscar_historico_cobranca({"cliente_id": cliente_id})
 
-            if response.data:
-                for item in response.data:
+            if historicos:
+                for item in historicos:
                     atualizar_historico_cobranca(item["id"], {"cliente_telefone": novo_telefone})
-                logging.warning(f"✅ {len(response.data)} históricos atualizados")
+                logging.warning(f"✅ {len(historicos)} históricos atualizados")
                 return {
                     "status": "success",
-                    "message": f"Telefone atualizado em {len(response.data)} históricos",
+                    "message": f"Telefone atualizado em {len(historicos)} históricos",
                     "cliente_id": cliente_id,
-                    "total_atualizado": len(response.data)
+                    "total_atualizado": len(historicos)
                 }
             else:
                 return {"status": "error", "message": "Nenhum histórico encontrado para este cliente"}
