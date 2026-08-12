@@ -2506,7 +2506,7 @@ async def testar_mensagem_direta(request: Request):
 async def testar_cobranca_cliente(request: Request):
     """
     Endpoint para testar cobrança para um cliente específico
-    Body: {"titulo_id": 123, "parcela_id": 456, "envio_pdf": true, "telefone_manual": "5591993808761"}
+    Body: {"titulo_id": 123, "parcela_id": 456, "envio_pdf": true, "telefone_manual": "5591993808761", "cliente_id": 737}
     """
     try:
         data = await request.json()
@@ -2514,11 +2514,12 @@ async def testar_cobranca_cliente(request: Request):
         parcela_id = data.get("parcela_id")
         envio_pdf = data.get("envio_pdf", True)
         telefone_manual = data.get("telefone_manual")
+        cliente_id = data.get("cliente_id", 999)
 
         if not titulo_id or not parcela_id:
             return {"success": False, "error": "titulo_id e parcela_id são obrigatórios"}
 
-        logging.warning(f"🧪 Teste manual para cliente - Título: {titulo_id}, Parcela: {parcela_id}, PDF: {envio_pdf}")
+        logging.warning(f"🧪 Teste manual para cliente - Título: {titulo_id}, Parcela: {parcela_id}, PDF: {envio_pdf}, Cliente ID: {cliente_id}")
 
         from sienge.sienge_cobranca import tem_boleto_apto, baixar_pdf_boleto, gerar_mensagem_cobranca
         from supabase_client import salvar_historico_cobranca, atualizar_historico_cobranca
@@ -2542,7 +2543,7 @@ async def testar_cobranca_cliente(request: Request):
 
         # Gerar mensagem
         mensagem = gerar_mensagem_cobranca({
-            "cliente_id": 999,
+            "cliente_id": cliente_id,
             "cliente_nome": cliente_nome,
             "cliente_telefone": cliente_telefone,
             "titulo_id": titulo_id,
@@ -2559,7 +2560,7 @@ async def testar_cobranca_cliente(request: Request):
 
         # Salvar no histórico
         dados_historico = {
-            "cliente_id": 999,
+            "cliente_id": cliente_id,
             "cliente_nome": cliente_nome,
             "cliente_telefone": cliente_telefone,
             "titulo_id": titulo_id,
