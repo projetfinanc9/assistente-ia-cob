@@ -251,6 +251,8 @@ async def executar_cobranca_agendada():
                                         })
                                     except Exception as e2:
                                         logging.warning(f"⚠️ Erro ao atualizar histórico: {e2}")
+    except Exception as e:
+        logging.error(f"❌ Erro na execução agendada: {e}", exc_info=True)
 
 def atualizar_agendamento(horario: str):
     """Atualiza o agendamento com novo horário"""
