@@ -2471,10 +2471,51 @@ async def testar_cobranca_cliente(request: Request):
         historico_id = historico_salvo.get("id") if isinstance(historico_salvo, dict) else historico_salvo
         logging.warning(f"💾 Histórico salvo: {historico_id}")
 
-        # Enviar WhatsApp
+        # Enviar WhatsApp - usar template se disponivel
         if WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN:
             numero = re.sub(r"\D", "", cliente_telefone)
             logging.warning(f"📱 Enviando para: {numero}")
+
+            # Tentar usar template primeiro
+            if numero.startswith("55"):
+                try:
+                    from whatsapp_templates import send_whatsapp_template_message
+
+                    logging.warning(f"📤 Enviando cobrança via template para {numero}")
+
+                    boleto_template = {
+                        "cliente_nome": cliente_nome,
+                        "valor": valor,
+                        "dias_antes": 0,
+                        "vencimento": vencimento,
+                        "pdf_url": pdf_url,
+                        "titulo_id": titulo_id,
+                        "parcela_id": parcela_id
+                    }
+
+                    message_id = send_whatsapp_template_message(numero, boleto_template)
+
+                    if message_id:
+                        logging.warning(f"✅ Template enviado com sucesso para {numero}")
+                        logging.warning(f"🆔 message_id retornado: {message_id}")
+
+                        # Atualizar status no histórico
+                        if historico_id:
+                            try:
+                                atualizar_historico_cobranca(historico_id, {
+                                    "status": "enviado",
+                                    "enviado_em": datetime.now().isoformat()
+                                })
+                                logging.warning(f"✅ Status atualizado para enviado")
+                            except Exception as e:
+                                logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
+
+                        return {"success": True, "message": f"Template enviado para {numero}", "message_id": message_id}
+                    else:
+                        logging.warning(f"⚠️ Erro ao enviar template, tentando PDF direto")
+                except Exception as e:
+                    logging.warning(f"❌ Erro ao enviar template via WhatsApp: {e}")
+                    logging.warning("⚠️ Fallback para envio de documento direto")
 
             # Normalizar número
             if not numero.startswith("55"):
