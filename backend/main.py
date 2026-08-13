@@ -1593,16 +1593,19 @@ async def reenviar_cobranca(historico_id: str):
     """
     Reenvia cobrança para um cliente específico baseado no histórico
     Atualiza o status do histórico existente em vez de criar um novo
+    Sempre busca dados atualizados do histórico para usar telefone atualizado
     """
     try:
         from supabase_client import buscar_historico_por_id, atualizar_historico_cobranca, salvar_log_mensagem
         from datetime import datetime
         
-        # Buscar histórico da cobrança
+        # Buscar histórico da cobrança (sempre buscar dados atualizados)
         historico = buscar_historico_por_id(historico_id)
         
         if not historico:
             return {"status": "error", "message": "Histórico não encontrado"}
+        
+        logging.warning(f"📋 Dados do histórico antes do envio: telefone={historico.get('cliente_telefone')}, status={historico.get('status')}")
         
         # Preparar dados do boleto
         boleto = {
