@@ -1283,9 +1283,13 @@ async def atualizar_cliente_sienge(request: Request, cliente_id: str = None, cli
             cliente_nome = data.get("cliente_nome") or cliente_nome
             historico_id = data.get("historico_id") or historico_id
         except:
-            pass  # Usar query params se body não for JSON
+            # Usar query params se body não for JSON ou estiver vazio
+            pass
 
         logging.warning(f"🔄 Iniciando atualização do cliente - ID: {cliente_id}, Nome: {cliente_nome}, Histórico: {historico_id}")
+
+        if not cliente_id and not cliente_nome:
+            return {"status": "error", "message": "cliente_id ou cliente_nome é obrigatório"}
 
         # Invalidar cache de clientes
         logging.warning(f"🗑️ Invalidando cache de clientes...")
