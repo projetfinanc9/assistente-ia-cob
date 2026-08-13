@@ -10,7 +10,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Loader2, X, FileText, FileSpreadsheet } from "lucide-react";
+import { Search, Loader2, X, FileText, FileSpreadsheet, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Label } from "@/components/ui/label";
 import { formatDistanceToNow, format } from "date-fns";
@@ -42,6 +42,7 @@ const History = () => {
   const [dataFim, setDataFim] = useState("");
   const [updating, setUpdating] = useState(false);
   const [resending, setResending] = useState(false);
+  const [updatingAll, setUpdatingAll] = useState(false);
 
   useEffect(() => {
     loadHistories();
@@ -159,6 +160,32 @@ const History = () => {
     }
   };
 
+  const atualizarTodosClientes = async () => {
+    if (!confirm("Deseja atualizar todos os clientes com dados do Sienge? Isso pode levar alguns minutos.")) {
+      return;
+    }
+    
+    setUpdatingAll(true);
+    try {
+      const response = await fetch(`${API_URL}/atualizar-todos-clientes-sienge`, {
+        method: "POST"
+      });
+      const data = await response.json();
+      
+      if (data.status === "success") {
+        alert(`Atualização concluída: ${data.total_atualizados}/${data.total_clientes} clientes atualizados.`);
+        loadHistories();
+      } else {
+        alert(`Erro ao atualizar clientes: ${data.message}`);
+      }
+    } catch (error) {
+      console.error("Erro ao atualizar todos os clientes:", error);
+      alert("Erro ao atualizar todos os clientes");
+    } finally {
+      setUpdatingAll(false);
+    }
+  };
+
   const filteredHistories = histories.filter(
     (h) =>
       h.cliente.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -220,6 +247,10 @@ const History = () => {
             </div>
             <Button onClick={loadHistories}>Filtrar</Button>
             <Button variant="outline" onClick={limparFiltros}>Limpar</Button>
+            <Button variant="outline" onClick={atualizarTodosClientes} disabled={updatingAll}>
+              {updatingAll ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+              Atualizar Todos
+            </Button>
             <Button variant="outline" onClick={() => exportar("pdf")}>
               <FileText className="h-4 w-4 mr-2" /> PDF
             </Button>
