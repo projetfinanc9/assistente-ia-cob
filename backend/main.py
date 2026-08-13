@@ -1636,23 +1636,50 @@ async def reenviar_cobranca(historico_id: str):
         if not numero.startswith("55"):
             return {"status": "error", "message": "Número de telefone inválido"}
         
-        # Enviar via WhatsApp
+        # Enviar via WhatsApp - usar template assim como o endpoint de teste
         if WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN:
             try:
                 message_id = None
-                if boleto.get("envio_pdf"):
+                
+                # Primeiro tentar usar template
+                if numero.startswith("55"):
+                    try:
+                        from whatsapp_templates import send_whatsapp_template_message
+                        
+                        logging.warning(f"📤 Reenviando cobrança via template para {numero}")
+                        
+                        # Obter pdf_url se não tiver
+                        if not boleto.get("pdf_url") and boleto.get("titulo_id") and boleto.get("parcela_id"):
+                            from sienge.sienge_cobranca import tem_boleto_apto
+                            apto, url_report = tem_boleto_apto(boleto["titulo_id"], boleto["parcela_id"])
+                            if apto:
+                                boleto["pdf_url"] = url_report
+                        
+                        message_id = send_whatsapp_template_message(numero, boleto)
+                        
+                        if message_id:
+                            logging.warning(f"✅ Template reenviado com sucesso para {numero}")
+                        else:
+                            logging.warning(f"⚠️ Template falhou, tentando PDF direto")
+                    except Exception as e:
+                        logging.warning(f"❌ Erro ao enviar template: {e}")
+                        logging.warning("⚠️ Fallback para envio de documento direto")
+                
+                # Fallback para PDF direto se template falhar ou não for Brasil
+                if not message_id and boleto.get("envio_pdf"):
                     from sienge.sienge_cobranca import baixar_pdf_boleto
-                    pdf_url = boleto.get("pdf_url")  # URL da verificação de aptidão
+                    pdf_url = boleto.get("pdf_url")
                     pdf_content = baixar_pdf_boleto(boleto["titulo_id"], boleto["parcela_id"], pdf_url)
                     
                     if pdf_content:
                         filename = f"boleto_{boleto['titulo_id']}_{boleto['parcela_id']}.pdf"
                         message_id = send_whatsapp_document(numero, pdf_content, filename, mensagem)
                     else:
-                        # Se não conseguir baixar PDF, não enviar (mesma lógica da cobrança automática)
                         logging.warning(f"⚠️ Não foi possível baixar o PDF para título {boleto['titulo_id']}, parcela {boleto['parcela_id']}")
-                        return {"status": "error", "message": "Não foi possível baixar o PDF do boleto. A cobrança não pode ser reenviada."}
-                else:
+                        return {"status": "error", "message": "Não foi possível baixar o PDF do boleto. Tente novamente mais tarde."}
+                
+                # Fallback para texto se PDF falhar
+                if not message_id:
                     message_id = send_whatsapp_cloud_message(numero, mensagem)
                 
                 # Atualizar histórico existente
@@ -1681,9 +1708,9 @@ async def reenviar_cobranca(historico_id: str):
                 }
             except Exception as e:
                 logging.error(f"❌ Erro ao reenviar cobrança: {e}")
-                return {"status": "error", "message": str(e)}
+                return {"status": "error", "message": f"Erro ao enviar mensagem via WhatsApp: {str(e)}"}
         else:
-            return {"status": "error", "message": "WhatsApp não configurado"}
+            return {"status": "error", "message": "WhatsApp não configurado no ambiente. Verifique WHATSAPP_PHONE_NUMBER_ID e WHATSAPP_TOKEN."}
     except Exception as e:
         logging.error(f"❌ Erro ao reenviar cobrança: {e}")
         return {"status": "error", "message": str(e)}
