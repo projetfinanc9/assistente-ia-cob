@@ -559,25 +559,32 @@ def verificar_boletos_vencendo() -> List[Dict]:
                     logging.warning(f"⏭️ Parcela {parcela_id} não apta para geração de boleto - pulando")
                     continue
                 
-                # Buscar telefone do cliente (usar cache se disponível)
+                # Buscar telefone do cliente (sempre buscar da API - cache desativado)
                 cliente_id = parcela.get("clientId")
                 cliente_nome = parcela.get("clientName")
                 cliente_telefone = None
                 
-                # Tentar obter telefone do cache de clientes
-                cache_clientes = obter_dados_cache("lista_clientes", validade_horas=24)
-                if cache_clientes:
-                    for cliente in cache_clientes:
-                        if cliente.get("id") == cliente_id:
-                            phones = cliente.get("phones", [])
-                            if phones:
-                                for phone in phones:
-                                    if phone.get("main"):
-                                        cliente_telefone = phone.get("number")
-                                        break
-                                if not cliente_telefone:
-                                    cliente_telefone = phones[0].get("number")
-                            break
+                # Buscar cliente diretamente da API do Sienge
+                try:
+                    url_cliente = f"{BASE_URL}/customers/{cliente_id}"
+                    r_cliente = requests.get(url_cliente, headers=json_headers, timeout=30)
+                    if r_cliente.status_code == 200:
+                        cliente_data = r_cliente.json()
+                        phones = cliente_data.get("phones", [])
+                        if phones:
+                            for phone in phones:
+                                if phone.get("main"):
+                                    cliente_telefone = phone.get("number")
+                                    break
+                            if not cliente_telefone:
+                                cliente_telefone = phones[0].get("number")
+                            logging.warning(f"📱 Telefone encontrado para cliente {cliente_id}: {cliente_telefone}")
+                        else:
+                            logging.warning(f"⚠️ Cliente {cliente_id} não possui telefone no Sienge")
+                    else:
+                        logging.warning(f"⚠️ Erro ao buscar cliente {cliente_id}: {r_cliente.status_code}")
+                except Exception as e:
+                    logging.warning(f"⚠️ Erro ao buscar telefone do cliente {cliente_id}: {e}")
                 
                 boletos_vencendo.append({
                     "cliente_id": cliente_id,
