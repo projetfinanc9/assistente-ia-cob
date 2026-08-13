@@ -144,13 +144,6 @@ const History = () => {
     
     setResending(true);
     try {
-      // Buscar dados atualizados do histórico antes de enviar
-      const histResponse = await fetch(`${API_URL}/cobranca-historico/${selectedHistory.id}`);
-      const histData = await histResponse.json();
-      const historicoAtualizado = histData;
-      
-      console.log("Dados atualizados do histórico:", historicoAtualizado);
-      
       const response = await fetch(`${API_URL}/reenviar-cobranca?historico_id=${selectedHistory.id}`, {
         method: "POST"
       });

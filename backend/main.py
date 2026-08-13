@@ -842,6 +842,24 @@ def _filtrar_historico(data_inicio=None, data_fim=None, cliente=None):
         out.append(item)
     return out
 
+@app.get("/cobranca-historico/{historico_id}")
+async def buscar_historico_por_id_endpoint(historico_id: str):
+    """
+    Endpoint para buscar um histórico específico por ID
+    Retorna dados atualizados do banco de dados
+    """
+    try:
+        from supabase_client import buscar_historico_por_id
+        historico = buscar_historico_por_id(historico_id)
+        
+        if not historico:
+            return {"status": "error", "message": "Histórico não encontrado"}
+        
+        return historico
+    except Exception as e:
+        logging.error(f"❌ Erro ao buscar histórico por ID: {e}")
+        return {"status": "error", "message": str(e)}
+
 @app.get("/logs-mensagens")
 async def buscar_logs_mensagens_endpoint(telefone: str = None, tipo: str = None, data_inicio: str = None, data_fim: str = None):
     """Endpoint para buscar logs de mensagens"""
