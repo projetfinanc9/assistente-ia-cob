@@ -404,6 +404,14 @@ const History = () => {
                   </div>
                 </div>
               )}
+              {selectedHistory.status === "pendente" && selectedHistory.erro_mensagem && (
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-2">Motivo</p>
+                  <div className="bg-muted border border-muted-foreground/20 p-4 rounded-md text-sm">
+                    {selectedHistory.erro_mensagem}
+                  </div>
+                </div>
+              )}
               {(selectedHistory.status === "erro" || selectedHistory.status === "pendente") && (
                 <div className="flex gap-2 pt-4">
                   <Button 
