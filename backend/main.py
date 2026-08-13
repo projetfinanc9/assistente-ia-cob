@@ -1263,12 +1263,11 @@ async def invalidar_cache_api(cache_key: str = "lista_clientes"):
 
 
 @app.post("/atualizar-cliente-sienge")
-async def atualizar_cliente_sienge(request: Request):
+async def atualizar_cliente_sienge(request: Request, cliente_id: str = None, cliente_nome: str = None, historico_id: str = None):
     """
     Atualiza dados de um cliente específico do Sienge
     Invalida o cache e busca dados atualizados
-    Body: {"cliente_id": 123, "cliente_nome": "nome", "historico_id": "uuid"}
-    Aceita cliente_id ou cliente_nome como parâmetro
+    Aceita query params OU body JSON: {"cliente_id": 123, "cliente_nome": "nome", "historico_id": "uuid"}
     Se historico_id for fornecido, atualiza o registro no Supabase
     """
     try:
@@ -1277,10 +1276,14 @@ async def atualizar_cliente_sienge(request: Request):
         from supabase_client import atualizar_historico_cobranca
         import requests
 
-        data = await request.json()
-        cliente_id = data.get("cliente_id")
-        cliente_nome = data.get("cliente_nome")
-        historico_id = data.get("historico_id")
+        # Tentar obter do body JSON primeiro, senão usar query params
+        try:
+            data = await request.json()
+            cliente_id = data.get("cliente_id") or cliente_id
+            cliente_nome = data.get("cliente_nome") or cliente_nome
+            historico_id = data.get("historico_id") or historico_id
+        except:
+            pass  # Usar query params se body não for JSON
 
         logging.warning(f"🔄 Iniciando atualização do cliente - ID: {cliente_id}, Nome: {cliente_nome}, Histórico: {historico_id}")
 
@@ -1368,6 +1371,110 @@ async def atualizar_cliente_sienge(request: Request):
             }
     except Exception as e:
         logging.error(f"❌ Erro ao atualizar cliente do Sienge: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/atualizar-todos-clientes-sienge")
+async def atualizar_todos_clientes_sienge():
+    """
+    Atualiza todos os clientes buscando dados do Sienge
+    Invalida o cache e busca dados atualizados para todos os clientes com histórico
+    """
+    try:
+        from sienge.sienge_cobranca import invalidar_cache
+        from sienge.sienge_config import BASE_URL, json_headers
+        from supabase_client import buscar_historico_cobrancas, atualizar_historico_cobranca
+        import requests
+
+        logging.warning(f"🔄 Iniciando atualização de todos os clientes...")
+
+        # Invalidar cache de clientes
+        logging.warning(f"🗑️ Invalidando cache de clientes...")
+        invalidar_cache("lista_clientes")
+
+        # Buscar todos os históricos
+        logging.warning(f"📊 Buscando todos os históricos...")
+        historicos = buscar_historico_cobrancas()
+
+        if not historicos:
+            return {"status": "error", "message": "Nenhum histórico encontrado"}
+
+        # Contar clientes únicos
+        clientes_unicos = {}
+        for hist in historicos:
+            cliente_id = hist.get("cliente_id")
+            if cliente_id and cliente_id not in clientes_unicos:
+                clientes_unicos[cliente_id] = {
+                    "id": cliente_id,
+                    "nome": hist.get("cliente_nome", ""),
+                    "historico_ids": []
+                }
+            if cliente_id:
+                clientes_unicos[cliente_id]["historico_ids"].append(hist.get("id"))
+
+        logging.warning(f"📊 {len(clientes_unicos)} clientes únicos encontrados")
+
+        # Atualizar cada cliente
+        total_atualizados = 0
+        erros = []
+
+        for cliente_id, cliente_info in clientes_unicos.items():
+            try:
+                logging.warning(f"📡 Buscando dados do cliente {cliente_id} no Sienge...")
+                url = f"{BASE_URL}/customers/{cliente_id}"
+                r = requests.get(url, headers=json_headers, timeout=30)
+
+                if r.status_code == 200:
+                    cliente_data = r.json()
+
+                    # Extrair telefone dos dados do cliente
+                    telefone = None
+                    phones = cliente_data.get("phones", [])
+                    if phones:
+                        for phone in phones:
+                            if phone.get("main"):
+                                telefone = phone.get("number")
+                                break
+                        if not telefone:
+                            telefone = phones[0].get("number")
+
+                    # Normalizar telefone
+                    if telefone:
+                        import re
+                        telefone_limpo = re.sub(r"\D", "", telefone)
+                        if not telefone_limpo.startswith("55"):
+                            telefone_limpo = "55" + telefone_limpo
+                        telefone = telefone_limpo
+
+                    logging.warning(f"📱 Cliente {cliente_id}: telefone {telefone}")
+
+                    # Atualizar todos os históricos desse cliente
+                    for hist_id in cliente_info["historico_ids"]:
+                        atualizar_historico_cobranca(hist_id, {"cliente_telefone": telefone})
+
+                    total_atualizados += 1
+                else:
+                    erro_msg = f"Erro ao buscar cliente {cliente_id}: {r.status_code}"
+                    logging.warning(f"⚠️ {erro_msg}")
+                    erros.append(erro_msg)
+
+            except Exception as e:
+                erro_msg = f"Erro ao processar cliente {cliente_id}: {str(e)}"
+                logging.warning(f"⚠️ {erro_msg}")
+                erros.append(erro_msg)
+
+        logging.warning(f"✅ Atualização concluída: {total_atualizados}/{len(clientes_unicos)} clientes atualizados")
+
+        return {
+            "status": "success",
+            "message": f"Atualização concluída: {total_atualizados}/{len(clientes_unicos)} clientes atualizados",
+            "total_clientes": len(clientes_unicos),
+            "total_atualizados": total_atualizados,
+            "erros": erros
+        }
+
+    except Exception as e:
+        logging.error(f"❌ Erro ao atualizar todos os clientes: {e}")
         return {"status": "error", "message": str(e)}
 
 
