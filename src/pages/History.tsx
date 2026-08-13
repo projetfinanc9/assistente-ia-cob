@@ -197,10 +197,10 @@ const History = () => {
   );
 
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, "default" | "destructive" | "secondary"> = {
+    const variants: Record<string, "default" | "destructive" | "secondary" | "outline"> = {
       enviado: "default",
       erro: "destructive",
-      pendente: "secondary",
+      pendente: "outline",
     };
 
     const labels: Record<string, string> = {
@@ -404,7 +404,7 @@ const History = () => {
                   </div>
                 </div>
               )}
-              {selectedHistory.status === "erro" && (
+              {(selectedHistory.status === "erro" || selectedHistory.status === "pendente") && (
                 <div className="flex gap-2 pt-4">
                   <Button 
                     onClick={atualizarCliente} 

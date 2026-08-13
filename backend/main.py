@@ -52,6 +52,11 @@ async def executar_cobranca_agendada():
             
             # Salvar registro no histórico antes de tentar enviar
             try:
+                # Adicionar motivo inicial se WhatsApp não estiver configurado
+                motivo_inicial = None
+                if not WHATSAPP_PHONE_NUMBER_ID or not WHATSAPP_TOKEN:
+                    motivo_inicial = "WhatsApp não configurado no ambiente (WHATSAPP_PHONE_NUMBER_ID ou WHATSAPP_TOKEN não definidos)"
+                
                 dados_historico = {
                     "cliente_id": boleto.get("cliente_id"),
                     "cliente_nome": boleto.get("cliente_nome"),
@@ -64,6 +69,7 @@ async def executar_cobranca_agendada():
                     "mensagem_template": boleto.get("mensagem_template"),
                     "mensagem_enviada": mensagem,
                     "status": "pendente",
+                    "erro_mensagem": motivo_inicial,
                     "tipo_envio": "pdf" if boleto.get("envio_pdf") else "texto"
                 }
                 logging.warning(f"💾 Salvando histórico com cliente_id: {boleto.get('cliente_id')}")
@@ -82,16 +88,18 @@ async def executar_cobranca_agendada():
                 if historico_id:
                     try:
                         atualizar_historico_cobranca(historico_id, {
-                            "status": "erro",
+                            "status": "pendente",
                             "erro_mensagem": erro_msg
                         })
-                        logging.warning(f"✅ Status atualizado para erro")
+                        logging.warning(f"✅ Status atualizado para pendente com motivo")
                     except Exception as e:
                         logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
                 continue
                 
             # Enviar via WhatsApp Cloud API se configurado
-            if WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN:
+            if not WHATSAPP_PHONE_NUMBER_ID or not WHATSAPP_TOKEN:
+                # WhatsApp não configurado - já marcado como pendente com motivo acima
+                continue
                 numero = re.sub(r"\D", "", boleto["cliente_telefone"])
                 
                 # Normalizar número de telefone
@@ -119,10 +127,10 @@ async def executar_cobranca_agendada():
                     if historico_id:
                         try:
                             atualizar_historico_cobranca(historico_id, {
-                                "status": "erro",
+                                "status": "pendente",
                                 "erro_mensagem": erro_msg
                             })
-                            logging.warning(f"✅ Status atualizado para erro")
+                            logging.warning(f"✅ Status atualizado para pendente com motivo")
                         except Exception as e:
                             logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
                     continue
@@ -157,14 +165,15 @@ async def executar_cobranca_agendada():
                             if historico_id:
                                 try:
                                     atualizar_historico_cobranca(historico_id, {
-                                        "status": "erro",
+                                        "status": "pendente",
                                         "erro_mensagem": erro_msg
                                     })
-                                    logging.warning(f"✅ Status atualizado para erro")
+                                    logging.warning(f"✅ Status atualizado para pendente com motivo")
                                 except Exception as e:
                                     logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
                     except Exception as e:
-                        logging.warning(f"❌ Erro ao enviar template via WhatsApp: {e}")
+                        erro_msg = f"Erro ao enviar template via WhatsApp: {str(e)}"
+                        logging.warning(f"❌ {erro_msg}")
                         # Fallback para envio de documento direto se template falhar
                         logging.warning("⚠️ Fallback para envio de documento direto")
                         
@@ -200,7 +209,7 @@ async def executar_cobranca_agendada():
                                         if historico_id:
                                             try:
                                                 atualizar_historico_cobranca(historico_id, {
-                                                    "status": "erro",
+                                                    "status": "pendente",
                                                     "erro_mensagem": "Erro ao enviar PDF"
                                                 })
                                             except Exception as e:
@@ -210,7 +219,7 @@ async def executar_cobranca_agendada():
                                     if historico_id:
                                         try:
                                             atualizar_historico_cobranca(historico_id, {
-                                                "status": "erro",
+                                                "status": "pendente",
                                                 "erro_mensagem": str(e)
                                             })
                                         except Exception as e2:
@@ -236,7 +245,7 @@ async def executar_cobranca_agendada():
                                     if historico_id:
                                         try:
                                             atualizar_historico_cobranca(historico_id, {
-                                                "status": "erro",
+                                                "status": "pendente",
                                                 "erro_mensagem": "Erro ao enviar mensagem"
                                             })
                                         except Exception as e:
@@ -246,7 +255,7 @@ async def executar_cobranca_agendada():
                                 if historico_id:
                                     try:
                                         atualizar_historico_cobranca(historico_id, {
-                                            "status": "erro",
+                                            "status": "pendente",
                                             "erro_mensagem": str(e)
                                         })
                                     except Exception as e2:
