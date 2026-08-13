@@ -1262,24 +1262,6 @@ async def carregar_configuracao_cobranca_api():
     return {"ativo": False, "horario_execucao": "09:00", "mensagem_atendimento": "Olá, esse número é usado apenas para envio automático. Caso tenha alguma dúvida, fale com um de nossos atendentes pelo número (91) 9999-9999", "lembretes": []}
 
 
-@app.post("/invalidar-cache")
-async def invalidar_cache_api(cache_key: str = "lista_clientes"):
-    """
-    Invalida um cache específico manualmente
-    Útil quando dados são atualizados no Sienge e precisam ser recarregados
-    """
-    try:
-        from sienge.sienge_cobranca import invalidar_cache
-        resultado = invalidar_cache(cache_key)
-        if resultado:
-            return {"status": "success", "message": f"Cache {cache_key} invalidado com sucesso"}
-        else:
-            return {"status": "error", "message": f"Cache {cache_key} não existe ou erro ao invalidar"}
-    except Exception as e:
-        logging.error(f"❌ Erro ao invalidar cache: {e}")
-        return {"status": "error", "message": str(e)}
-
-
 @app.post("/atualizar-cliente-sienge")
 async def atualizar_cliente_sienge(request: Request, cliente_id: str = None, cliente_nome: str = None, historico_id: str = None):
     """
@@ -1309,9 +1291,8 @@ async def atualizar_cliente_sienge(request: Request, cliente_id: str = None, cli
         if not cliente_id and not cliente_nome:
             return {"status": "error", "message": "cliente_id ou cliente_nome é obrigatório"}
 
-        # Invalidar cache de clientes
-        logging.warning(f"🗑️ Invalidando cache de clientes...")
-        invalidar_cache("lista_clientes")
+        # Cache desativado - buscar dados atualizados diretamente
+        logging.warning(f"📡 Buscando dados atualizados do cliente (cache desativado)...")
 
         # Buscar dados atualizados do cliente
         if cliente_id:
@@ -1410,9 +1391,8 @@ async def atualizar_todos_clientes_sienge():
 
         logging.warning(f"🔄 Iniciando atualização de todos os clientes...")
 
-        # Invalidar cache de clientes
-        logging.warning(f"🗑️ Invalidando cache de clientes...")
-        invalidar_cache("lista_clientes")
+        # Cache desativado - buscar dados atualizados diretamente
+        logging.warning(f"📡 Buscando dados atualizados (cache desativado)...")
 
         # Buscar todos os históricos
         logging.warning(f"📊 Buscando todos os históricos...")
@@ -1562,8 +1542,7 @@ async def atualizar_telefone_cliente(request: Request):
 
                 if r_update.status_code == 204:
                     logging.warning(f"✅ Telefone atualizado no Sienge")
-                    # Invalidar cache
-                    invalidar_cache("lista_clientes")
+                    # Cache desativado - dados serão buscados diretamente
                 else:
                     logging.warning(f"⚠️ Erro ao atualizar telefone no Sienge: {r_update.status_code}")
             else:
@@ -1639,9 +1618,8 @@ async def reenviar_cobranca(historico_id: str):
             "envio_pdf": historico.get("tipo_envio") == "pdf"
         }
         
-        # Invalidar cache para garantir dados atualizados
-        from sienge.sienge_cobranca import invalidar_cache
-        invalidar_cache("lista_clientes")
+        # Cache desativado - buscar dados atualizados diretamente
+        logging.warning(f"📡 Buscando dados atualizados (cache desativado)...")
         
         # Gerar mensagem
         mensagem = gerar_mensagem_cobranca(boleto)

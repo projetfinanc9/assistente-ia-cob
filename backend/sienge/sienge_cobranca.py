@@ -15,27 +15,10 @@ CACHE_DIR = Path(__file__).parent.parent / "cache"
 CACHE_DIR.mkdir(exist_ok=True)
 
 def obter_dados_cache(cache_key: str, validade_horas: int = 24) -> Dict:
-    """Obtém dados do cache se ainda válido"""
-    cache_file = CACHE_DIR / f"{cache_key}.json"
-    
-    if not cache_file.exists():
-        return None
-    
-    try:
-        with open(cache_file, 'r', encoding='utf-8') as f:
-            cache_data = json.load(f)
-        
-        # Verificar validade
-        cache_time = datetime.fromisoformat(cache_data.get("timestamp", ""))
-        if datetime.now() - cache_time > timedelta(hours=validade_horas):
-            logging.warning(f"🔄 Cache {cache_key} expirado")
-            return None
-        
-        logging.warning(f"✅ Cache {cache_key} válido (idade: {(datetime.now() - cache_time).total_seconds() / 3600:.1f}h)")
-        return cache_data.get("data")
-    except Exception as e:
-        logging.warning(f"⚠️ Erro ao ler cache {cache_key}: {e}")
-        return None
+    """Obtém dados do cache se ainda válido - DESATIVADO: sempre busca da API"""
+    # Cache desativado - sempre retorna None para forçar busca da API
+    logging.warning(f"🔄 Cache desativado para {cache_key} - buscando da API")
+    return None
 
 def salvar_cache(cache_key: str, data: Dict):
     """Salva dados no cache"""
