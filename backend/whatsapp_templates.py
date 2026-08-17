@@ -97,14 +97,31 @@ def fazer_upload_pdf(pdf_content: bytes, filename: str) -> Optional[str]:
         logging.error(f"Erro ao fazer upload do PDF: {e}")
         return None
 
-def send_whatsapp_template_message(numero: str, boleto: dict, template_name: str = "lembrete_de_vencimento") -> Optional[str]:
+def selecionar_template(dias: int) -> str:
+    """
+    Seleciona o template apropriado baseado nos dias antes/depois do vencimento
+    
+    Args:
+        dias: Número de dias (negativo = antes, positivo = depois, 0 = no dia)
+    
+    Returns:
+        Nome do template a usar
+    """
+    if dias == 0:
+        return "lembrete_no_dia_do_vencimento2"
+    elif dias < 0:
+        return "lembrete_de_vencimento"
+    else:
+        return "lembrede_apos_vendimento"
+
+def send_whatsapp_template_message(numero: str, boleto: dict, template_name: str = None) -> Optional[str]:
     """
     Envia mensagem usando template aprovado da Meta
     
     Args:
         numero: Numero de telefone (sem 'whatsapp:', apenas digitos)
         boleto: Dicionario com dados do boleto
-        template_name: Nome do template a usar (default: auto_pay_reminder_3)
+        template_name: Nome do template a usar (se None, seleciona automaticamente)
     
     Returns:
         message_id se sucesso, None se falhar
@@ -137,11 +154,17 @@ def send_whatsapp_template_message(numero: str, boleto: dict, template_name: str
     titulo_id = boleto.get("titulo_id")
     parcela_id = boleto.get("parcela_id")
     
+    # Selecionar template automaticamente se não fornecido
+    if template_name is None:
+        template_name = selecionar_template(dias)
+        logging.warning(f"Template selecionado automaticamente: {template_name} (dias: {dias})")
+    
     # Formatar parametros
     cliente_texto = cliente
     valor_texto = formatar_valor(valor)
-    # Para template lembrete_de_vencimento, usar apenas o numero (template ja tem o texto)
-    if template_name == "lembrete_de_vencimento":
+    # Para templates que ja tem o texto no proprio template, usar apenas o numero
+    # Verificar se o template e um dos que precisam de numero ou texto
+    if template_name in ["lembrete_de_vencimento", "lembrete_no_dia_do_vencimento2", "lembrede_apos_vendimento"]:
         dias_texto = formatar_dias_numero(dias)
     else:
         dias_texto = formatar_dias_texto(dias)

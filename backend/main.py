@@ -137,13 +137,15 @@ async def executar_cobranca_agendada():
                 
                 if numero.startswith("55"):
                     # Usar template aprovado da Meta para envio de cobrança
+                    # Sistema seleciona automaticamente o template baseado nos dias
                     try:
                         from whatsapp_templates import send_whatsapp_template_message
                         
                         logging.warning(f"📤 Enviando cobrança via template para {numero}")
                         logging.warning(f"🆔 histórico_id: {historico_id}")
                         
-                        message_id = send_whatsapp_template_message(numero, boleto)
+                        # Não passar template_name - sistema seleciona automaticamente
+                        message_id = send_whatsapp_template_message(numero, boleto, template_name=None)
                         
                         if message_id:
                             logging.warning(f"✅ Template enviado com sucesso para {numero}")
@@ -1663,7 +1665,7 @@ async def reenviar_cobranca(historico_id: str):
                             if apto:
                                 boleto["pdf_url"] = url_report
                         
-                        message_id = send_whatsapp_template_message(numero, boleto)
+                        message_id = send_whatsapp_template_message(numero, boleto, template_name=None)
                         
                         if message_id:
                             logging.warning(f"✅ Template reenviado com sucesso para {numero}")
@@ -2761,7 +2763,7 @@ async def testar_cobranca_cliente(request: Request):
                         "parcela_id": parcela_id
                     }
 
-                    message_id = send_whatsapp_template_message(numero, boleto_template)
+                    message_id = send_whatsapp_template_message(numero, boleto_template, template_name=None)
 
                     if message_id:
                         logging.warning(f"✅ Template enviado com sucesso para {numero}")
