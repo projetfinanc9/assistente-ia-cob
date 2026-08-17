@@ -513,9 +513,12 @@ def verificar_boletos_vencendo() -> List[Dict]:
     # Processar parcelas retornadas pelo Bulk-data
     for parcela in parcelas_bulk:
         # Verificar se parcela tem baixa (paga)
+        # Considerar baixa apenas se tiver receipts E o saldo for 0
         receipts = parcela.get("receipts", [])
-        if receipts:
-            logging.warning(f"⏭️ Parcela {parcela.get('installmentId')} já tem baixa, ignorando")
+        balance = parcela.get("balanceAmount", 0)
+        
+        if receipts and balance == 0:
+            logging.warning(f"⏭️ Parcela {parcela.get('installmentId')} já tem baixa (saldo zerado), ignorando")
             continue
         
         # Extrair dados da parcela
