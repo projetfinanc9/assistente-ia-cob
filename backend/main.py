@@ -156,6 +156,7 @@ async def executar_cobranca_agendada():
                                 if config_whatsapp:
                                     whatsapp_phone_number_id = config_whatsapp.get("whatsapp_phone_number_id")
                                     whatsapp_token = config_whatsapp.get("whatsapp_token")
+                                    # NÃO logar o token por segurança
                                     logging.warning(f"📱 Usando WhatsApp do empreendimento {enterprise_id}: {whatsapp_phone_number_id}")
                                 else:
                                     logging.warning(f"⚠️ Nenhuma configuração WhatsApp encontrada para empreendimento {enterprise_id}, usando global")
@@ -1078,6 +1079,7 @@ async def testar_cobranca():
                                 if config_whatsapp:
                                     whatsapp_phone_number_id = config_whatsapp.get("whatsapp_phone_number_id")
                                     whatsapp_token = config_whatsapp.get("whatsapp_token")
+                                    # NÃO logar o token por segurança
                                     logging.warning(f"📱 Usando WhatsApp do empreendimento {enterprise_id}: {whatsapp_phone_number_id}")
                                 else:
                                     logging.warning(f"⚠️ Nenhuma configuração WhatsApp encontrada para empreendimento {enterprise_id}, usando global")

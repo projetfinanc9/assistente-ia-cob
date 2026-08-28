@@ -5,6 +5,7 @@ import os
 import sys
 from supabase import create_client, Client
 from dotenv import load_dotenv
+from cryptography.fernet import Fernet
 
 # Configurar encoding para UTF-8 no Windows
 if sys.platform == 'win32':
@@ -18,6 +19,15 @@ load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+# Chave de criptografia para tokens sensíveis
+ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY")
+if not ENCRYPTION_KEY:
+    # Gerar chave se não existir (apenas para desenvolvimento)
+    ENCRYPTION_KEY = Fernet.generate_key()
+    print("⚠️ ENCRYPTION_KEY não configurada, usando chave gerada. Configure no .env para produção.")
+
+cipher_suite = Fernet(ENCRYPTION_KEY)
 
 # Criar cliente Supabase
 supabase: Client = None
@@ -34,6 +44,32 @@ if SUPABASE_URL and SUPABASE_KEY:
 else:
     print("AVISO SUPABASE_URL ou SUPABASE_KEY nao configurados no .env")
 
+
+# ============================================================
+# FUNÇÕES DE CRIPTOGRAFIA
+# ============================================================
+
+def encrypt_token(token: str) -> str:
+    """Criptografa token antes de salvar no banco"""
+    if not token:
+        return None
+    try:
+        encrypted = cipher_suite.encrypt(token.encode())
+        return encrypted.decode()
+    except Exception as e:
+        print(f"❌ Erro ao criptografar token: {e}")
+        return None
+
+def decrypt_token(encrypted_token: str) -> str:
+    """Descriptografa token para uso"""
+    if not encrypted_token:
+        return None
+    try:
+        decrypted = cipher_suite.decrypt(encrypted_token.encode())
+        return decrypted.decode()
+    except Exception as e:
+        print(f"❌ Erro ao descriptografar token: {e}")
+        return None
 
 # ============================================================
 # FUNÇÕES DE ACESSO AO BANCO DE DADOS
@@ -369,6 +405,7 @@ def salvar_configuracao_sienge(dados_config: dict):
 def atualizar_configuracao_whatsapp_empreendimento(enterprise_id: int, whatsapp_phone_number_id: str = None, whatsapp_token: str = None):
     """
     Atualiza configuração de WhatsApp de um empreendimento
+    CRIPTOGRAFA o token antes de salvar
     """
     if not supabase:
         return None
@@ -378,13 +415,18 @@ def atualizar_configuracao_whatsapp_empreendimento(enterprise_id: int, whatsapp_
         if whatsapp_phone_number_id is not None:
             update_data["whatsapp_phone_number_id"] = whatsapp_phone_number_id
         if whatsapp_token is not None:
-            update_data["whatsapp_token"] = whatsapp_token
+            # Criptografar token antes de salvar
+            encrypted_token = encrypt_token(whatsapp_token)
+            if encrypted_token:
+                update_data["whatsapp_token"] = encrypted_token
+            else:
+                print("⚠️ Não foi possível criptografar o token, não salvando")
         
         if not update_data:
             return None
         
         response = supabase.table("empreendimentos_cobranca").update(update_data).eq("enterprise_id", enterprise_id).execute()
-        print(f"✅ Configuração WhatsApp do empreendimento {enterprise_id} atualizada")
+        print(f"✅ Configuração WhatsApp do empreendimento {enterprise_id} atualizada (token criptografado)")
         return response.data[0] if response.data else None
     except Exception as e:
         print(f"❌ Erro ao atualizar configuração WhatsApp do empreendimento: {e}")
@@ -394,6 +436,7 @@ def atualizar_configuracao_whatsapp_empreendimento(enterprise_id: int, whatsapp_
 def buscar_configuracao_whatsapp_empreendimento(enterprise_id: int):
     """
     Busca configuração de WhatsApp de um empreendimento
+    DESCRIPTOGRAFA o token após buscar
     """
     if not supabase:
         return None
@@ -401,7 +444,16 @@ def buscar_configuracao_whatsapp_empreendimento(enterprise_id: int):
     try:
         response = supabase.table("empreendimentos_cobranca").select("whatsapp_phone_number_id", "whatsapp_token").eq("enterprise_id", enterprise_id).execute()
         if response.data and len(response.data) > 0:
-            return response.data[0]
+            config = response.data[0]
+            # Descriptografar token para uso
+            if config.get("whatsapp_token"):
+                decrypted_token = decrypt_token(config["whatsapp_token"])
+                if decrypted_token:
+                    config["whatsapp_token"] = decrypted_token
+                else:
+                    print(f"⚠️ Não foi possível descriptografar token do empreendimento {enterprise_id}")
+                    config["whatsapp_token"] = None
+            return config
         return None
     except Exception as e:
         print(f"❌ Erro ao buscar configuração WhatsApp do empreendimento: {e}")
