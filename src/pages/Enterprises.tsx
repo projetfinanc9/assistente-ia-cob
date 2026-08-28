@@ -6,10 +6,12 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { 
   RefreshCw, Building2, CheckCircle, XCircle, Clock, AlertCircle,
   Search, Filter, CheckSquare, Square, ChevronDown, ChevronUp,
-  MapPin, Building, Calendar, TrendingUp
+  MapPin, Building, Calendar, TrendingUp, Phone, Settings, Save
 } from 'lucide-react';
 
 interface Enterprise {
@@ -25,6 +27,8 @@ interface Enterprise {
   created_at: string;
   updated_at: string;
   address?: string;
+  whatsapp_phone_number_id?: string;
+  whatsapp_token?: string;
 }
 
 interface SyncLog {
@@ -54,6 +58,13 @@ export default function Enterprises() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [selectedAll, setSelectedAll] = useState(false);
   const [selectedEnterprises, setSelectedEnterprises] = useState<Set<number>>(new Set());
+  
+  // WhatsApp configuration dialog
+  const [whatsappDialogOpen, setWhatsappDialogOpen] = useState(false);
+  const [selectedEnterpriseForWhatsapp, setSelectedEnterpriseForWhatsapp] = useState<Enterprise | null>(null);
+  const [whatsappPhoneNumberId, setWhatsappPhoneNumberId] = useState('');
+  const [whatsappToken, setWhatsappToken] = useState('');
+  const [savingWhatsapp, setSavingWhatsapp] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -197,6 +208,46 @@ export default function Enterprises() {
       setSuccess(`${selectedEnterprises.size} empreendimentos desativados`);
     } catch (err) {
       setError('Erro ao desativar empreendimentos');
+    }
+  };
+
+  const openWhatsappDialog = (enterprise: Enterprise) => {
+    setSelectedEnterpriseForWhatsapp(enterprise);
+    setWhatsappPhoneNumberId(enterprise.whatsapp_phone_number_id || '');
+    setWhatsappToken(enterprise.whatsapp_token || '');
+    setWhatsappDialogOpen(true);
+  };
+
+  const saveWhatsappConfig = async () => {
+    if (!selectedEnterpriseForWhatsapp) return;
+    
+    try {
+      setSavingWhatsapp(true);
+      setError(null);
+      
+      const response = await fetch(`${API_URL}/enterprises/whatsapp-config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          enterprise_id: selectedEnterpriseForWhatsapp.enterprise_id,
+          whatsapp_phone_number_id: whatsappPhoneNumberId || null,
+          whatsapp_token: whatsappToken || null
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setSuccess('Configuração WhatsApp salva com sucesso');
+        setWhatsappDialogOpen(false);
+        await loadEnterprises();
+      } else {
+        setError(data.error || 'Erro ao salvar configuração WhatsApp');
+      }
+    } catch (err) {
+      setError('Erro ao conectar com o servidor');
+    } finally {
+      setSavingWhatsapp(false);
     }
   };
 
@@ -550,6 +601,7 @@ export default function Enterprises() {
                     </th>
                     <th className="p-3 text-left">Tipo</th>
                     <th className="p-3 text-left">Status</th>
+                    <th className="p-3 text-left">WhatsApp</th>
                     <th className="p-3 text-left cursor-pointer hover:text-blue-600" onClick={() => handleSort('updated')}>
                       <div className="flex items-center gap-1">
                         Atualizado
@@ -600,6 +652,24 @@ export default function Enterprises() {
                           {getCostCenterStatusLabel(enterprise.cost_center_status)}
                         </div>
                       </td>
+                      <td className="p-3">
+                        {enterprise.whatsapp_phone_number_id ? (
+                          <Badge className="bg-green-100 text-green-800 gap-1">
+                            <Phone className="h-3 w-3" />
+                            Configurado
+                          </Badge>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openWhatsappDialog(enterprise)}
+                            className="h-6 text-xs"
+                          >
+                            <Settings className="h-3 w-3 mr-1" />
+                            Configurar
+                          </Button>
+                        )}
+                      </td>
                       <td className="p-3 text-sm text-muted-foreground">
                         {new Date(enterprise.updated_at).toLocaleDateString('pt-BR')}
                       </td>
@@ -617,6 +687,73 @@ export default function Enterprises() {
           )}
         </CardContent>
       </Card>
+
+      {/* WhatsApp Configuration Dialog */}
+      <Dialog open={whatsappDialogOpen} onOpenChange={setWhatsappDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Phone className="h-5 w-5" />
+              Configurar WhatsApp
+            </DialogTitle>
+            <DialogDescription>
+              Configure as credenciais do WhatsApp Business API para este empreendimento
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedEnterpriseForWhatsapp && (
+            <div className="space-y-4">
+              <div className="text-sm font-medium">
+                Empreendimento: {selectedEnterpriseForWhatsapp.enterprise_name}
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="whatsapp-phone-number-id">WhatsApp Phone Number ID</Label>
+                <Input
+                  id="whatsapp-phone-number-id"
+                  placeholder="Ex: 1197028640168563"
+                  value={whatsappPhoneNumberId}
+                  onChange={(e) => setWhatsappPhoneNumberId(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  ID do número de telefone do WhatsApp Business API (Meta)
+                </p>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="whatsapp-token">WhatsApp Token (opcional)</Label>
+                <Input
+                  id="whatsapp-token"
+                  type="password"
+                  placeholder="Deixe em branco para usar o token global"
+                  value={whatsappToken}
+                  onChange={(e) => setWhatsappToken(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Token de acesso do WhatsApp. Se deixado em branco, usará o token global configurado no sistema
+                </p>
+              </div>
+              
+              <div className="flex justify-end gap-2 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setWhatsappDialogOpen(false)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={saveWhatsappConfig}
+                  disabled={savingWhatsapp}
+                  className="gap-2"
+                >
+                  <Save className="h-4 w-4" />
+                  {savingWhatsapp ? 'Salvando...' : 'Salvar'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

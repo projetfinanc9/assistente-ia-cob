@@ -140,12 +140,36 @@ async def executar_cobranca_agendada():
                     # Sistema seleciona automaticamente o template baseado nos dias
                     try:
                         from whatsapp_templates import send_whatsapp_template_message
+                        from supabase_client import buscar_configuracao_whatsapp_empreendimento
                         
                         logging.warning(f"📤 Enviando cobrança via template para {numero}")
                         logging.warning(f"🆔 histórico_id: {historico_id}")
                         
+                        # Buscar configuração WhatsApp específica do empreendimento (se disponível)
+                        enterprise_id = boleto.get("enterprise_id")
+                        whatsapp_phone_number_id = None
+                        whatsapp_token = None
+                        
+                        if enterprise_id:
+                            try:
+                                config_whatsapp = buscar_configuracao_whatsapp_empreendimento(enterprise_id)
+                                if config_whatsapp:
+                                    whatsapp_phone_number_id = config_whatsapp.get("whatsapp_phone_number_id")
+                                    whatsapp_token = config_whatsapp.get("whatsapp_token")
+                                    logging.warning(f"📱 Usando WhatsApp do empreendimento {enterprise_id}: {whatsapp_phone_number_id}")
+                                else:
+                                    logging.warning(f"⚠️ Nenhuma configuração WhatsApp encontrada para empreendimento {enterprise_id}, usando global")
+                            except Exception as e:
+                                logging.warning(f"⚠️ Erro ao buscar configuração WhatsApp do empreendimento: {e}")
+                        
                         # Não passar template_name - sistema seleciona automaticamente
-                        message_id = send_whatsapp_template_message(numero, boleto, template_name=None)
+                        message_id = send_whatsapp_template_message(
+                            numero, 
+                            boleto, 
+                            template_name=None,
+                            whatsapp_phone_number_id=whatsapp_phone_number_id,
+                            whatsapp_token=whatsapp_token
+                        )
                         
                         if message_id:
                             logging.warning(f"✅ Template enviado com sucesso para {numero}")
@@ -1042,6 +1066,24 @@ async def testar_cobranca():
                     if len(numero) == 11 or len(numero) == 10:
                         numero = "55" + numero
                     if numero.startswith("55"):
+                        # Buscar configuração WhatsApp específica do empreendimento (se disponível)
+                        enterprise_id = boleto.get("enterprise_id")
+                        whatsapp_phone_number_id = None
+                        whatsapp_token = None
+                        
+                        if enterprise_id:
+                            try:
+                                from supabase_client import buscar_configuracao_whatsapp_empreendimento
+                                config_whatsapp = buscar_configuracao_whatsapp_empreendimento(enterprise_id)
+                                if config_whatsapp:
+                                    whatsapp_phone_number_id = config_whatsapp.get("whatsapp_phone_number_id")
+                                    whatsapp_token = config_whatsapp.get("whatsapp_token")
+                                    logging.warning(f"📱 Usando WhatsApp do empreendimento {enterprise_id}: {whatsapp_phone_number_id}")
+                                else:
+                                    logging.warning(f"⚠️ Nenhuma configuração WhatsApp encontrada para empreendimento {enterprise_id}, usando global")
+                            except Exception as e:
+                                logging.warning(f"⚠️ Erro ao buscar configuração WhatsApp do empreendimento: {e}")
+                        
                         # Verificar se deve enviar PDF do boleto
                         if boleto.get("envio_pdf"):
                             from sienge.sienge_cobranca import baixar_pdf_boleto
@@ -1058,7 +1100,7 @@ async def testar_cobranca():
                                 logging.warning(f"📤 Enviando PDF via WhatsApp para {numero}")
                                 logging.warning(f"🆔 histórico_id: {historico_id}")
                                 try:
-                                    message_id = send_whatsapp_document(numero, pdf_content, filename, mensagem)
+                                    message_id = send_whatsapp_document(numero, pdf_content, filename, mensagem, whatsapp_phone_number_id, whatsapp_token)
                                     
                                     # Verificar se o envio foi bem-sucedido
                                     if message_id is None:
@@ -1785,20 +1827,25 @@ async def verify_whatsapp_cobranca(request: Request):
 # ============================================================
 # 💬 WEBHOOK WHATSAPP CLOUD API (RECEBIMENTO)
 # ============================================================
-def send_whatsapp_cloud_message(to_number: str, body: str, buttons: list = None, list_items: list = None):
+def send_whatsapp_cloud_message(to_number: str, body: str, buttons: list = None, list_items: list = None, whatsapp_phone_number_id: str = None, whatsapp_token: str = None):
     """
     Envia mensagem de texto usando WhatsApp Cloud API.
     to_number: número sem 'whatsapp:', ex: 559193808761
     buttons: lista de botões interativos
     list_items: lista de itens para list message com links
+    whatsapp_phone_number_id: Phone Number ID do WhatsApp (opcional, usa global se não fornecido)
+    whatsapp_token: Token do WhatsApp (opcional, usa global se não fornecido)
     """
-    if not (WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN):
+    phone_number_id = whatsapp_phone_number_id or WHATSAPP_PHONE_NUMBER_ID
+    token = whatsapp_token or WHATSAPP_TOKEN
+    
+    if not (phone_number_id and token):
         logging.error("❌ WHATSAPP_PHONE_NUMBER_ID ou WHATSAPP_TOKEN não configurados.")
         return
 
-    url = f"https://graph.facebook.com/v20.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
+    url = f"https://graph.facebook.com/v20.0/{phone_number_id}/messages"
     headers = {
-        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     }
     
@@ -1903,25 +1950,30 @@ def send_whatsapp_cloud_message(to_number: str, body: str, buttons: list = None,
         return False
 
 
-def send_whatsapp_document(to_number: str, file_content: bytes, filename: str, caption: str = None):
+def send_whatsapp_document(to_number: str, file_content: bytes, filename: str, caption: str = None, whatsapp_phone_number_id: str = None, whatsapp_token: str = None):
     """
     Envia documento (PDF, etc.) via WhatsApp Cloud API.
     to_number: número sem 'whatsapp:', ex: 559193808761
     file_content: conteúdo do arquivo em bytes
     filename: nome do arquivo
     caption: legenda opcional do documento
+    whatsapp_phone_number_id: Phone Number ID do WhatsApp (opcional, usa global se não fornecido)
+    whatsapp_token: Token do WhatsApp (opcional, usa global se não fornecido)
     Retorna: message_id se sucesso, None se falha
     """
     import time
     
-    if not (WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN):
+    phone_number_id = whatsapp_phone_number_id or WHATSAPP_PHONE_NUMBER_ID
+    token = whatsapp_token or WHATSAPP_TOKEN
+    
+    if not (phone_number_id and token):
         logging.error("❌ WHATSAPP_PHONE_NUMBER_ID ou WHATSAPP_TOKEN não configurados.")
         return None
 
     # Primeiro, fazer upload do documento com retry para 429
-    upload_url = f"https://graph.facebook.com/v20.0/{WHATSAPP_PHONE_NUMBER_ID}/media"
+    upload_url = f"https://graph.facebook.com/v20.0/{phone_number_id}/media"
     upload_headers = {
-        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Authorization": f"Bearer {token}",
     }
     
     files = {
@@ -1954,9 +2006,9 @@ def send_whatsapp_document(to_number: str, file_content: bytes, filename: str, c
     logging.warning(f"✅ Documento uploadado: {media_id}")
     
     # Enviar documento usando media_id com retry para 429
-    message_url = f"https://graph.facebook.com/v20.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
+    message_url = f"https://graph.facebook.com/v20.0/{phone_number_id}/messages"
     message_headers = {
-        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     }
     
@@ -3121,6 +3173,34 @@ def update_enterprise_status(request: EnterpriseStatusRequest):
         }
     except Exception as e:
         logging.error(f"❌ Erro ao atualizar status do empreendimento: {e}")
+        return {"success": False, "error": str(e)}
+
+class EnterpriseWhatsappConfigRequest(BaseModel):
+    enterprise_id: int
+    whatsapp_phone_number_id: Optional[str] = None
+    whatsapp_token: Optional[str] = None
+
+@app.post("/enterprises/whatsapp-config")
+def update_enterprise_whatsapp_config(request: EnterpriseWhatsappConfigRequest):
+    """Atualiza a configuração WhatsApp de um empreendimento"""
+    try:
+        from supabase_client import supabase
+        from supabase_client import atualizar_configuracao_whatsapp_empreendimento
+        
+        empreendimento = atualizar_configuracao_whatsapp_empreendimento(
+            supabase,
+            request.enterprise_id,
+            request.whatsapp_phone_number_id,
+            request.whatsapp_token
+        )
+        
+        return {
+            "success": True,
+            "data": empreendimento,
+            "message": "Configuração WhatsApp atualizada com sucesso"
+        }
+    except Exception as e:
+        logging.error(f"❌ Erro ao atualizar configuração WhatsApp do empreendimento: {e}")
         return {"success": False, "error": str(e)}
 
 @app.get("/enterprises/logs")

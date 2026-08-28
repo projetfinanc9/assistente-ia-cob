@@ -566,6 +566,7 @@ def verificar_boletos_vencendo() -> List[Dict]:
                 cliente_id = parcela.get("clientId")
                 cliente_nome = parcela.get("clientName")
                 cliente_telefone = None
+                enterprise_id = parcela.get("enterpriseId")  # ID do empreendimento
                 
                 # Buscar cliente diretamente da API do Sienge
                 try:
@@ -601,7 +602,8 @@ def verificar_boletos_vencendo() -> List[Dict]:
                     "mensagem_template": lembrete.get("mensagem"),
                     "enviar_segunda_via": lembrete.get("enviar_segunda_via", False),
                     "envio_pdf": lembrete.get("envio_pdf", False),
-                    "pdf_url": url_report  # URL do PDF da verificação de aptidão
+                    "pdf_url": url_report,  # URL do PDF da verificação de aptidão
+                    "enterprise_id": enterprise_id  # ID do empreendimento para seleção de WhatsApp
                 })
                 logging.warning(f"✅ Boleto encontrado: {cliente_nome} - Vence em {dias_antes} dias")
     

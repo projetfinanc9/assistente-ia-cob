@@ -51,23 +51,28 @@ def formatar_vencimento(vencimento_str: str) -> str:
     except:
         return vencimento_str
 
-def fazer_upload_pdf(pdf_content: bytes, filename: str) -> Optional[str]:
+def fazer_upload_pdf(pdf_content: bytes, filename: str, whatsapp_phone_number_id: str = None, whatsapp_token: str = None) -> Optional[str]:
     """
     Faz upload do PDF para a API do WhatsApp e retorna o media_id
     
     Args:
         pdf_content: Conteúdo binário do PDF
         filename: Nome do arquivo
+        whatsapp_phone_number_id: Phone Number ID do WhatsApp (opcional, usa global se não fornecido)
+        whatsapp_token: Token do WhatsApp (opcional, usa global se não fornecido)
     
     Returns:
         media_id se sucesso, None se falhar
     """
-    if not WHATSAPP_PHONE_NUMBER_ID or not WHATSAPP_TOKEN:
+    phone_number_id = whatsapp_phone_number_id or WHATSAPP_PHONE_NUMBER_ID
+    token = whatsapp_token or WHATSAPP_TOKEN
+    
+    if not phone_number_id or not token:
         logging.error("WHATSAPP_PHONE_NUMBER_ID ou WHATSAPP_TOKEN nao configurados")
         return None
     
-    url = f"https://graph.facebook.com/v20.0/{WHATSAPP_PHONE_NUMBER_ID}/media"
-    headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}"}
+    url = f"https://graph.facebook.com/v20.0/{phone_number_id}/media"
+    headers = {"Authorization": f"Bearer {token}"}
     
     try:
         files = {
@@ -114,7 +119,7 @@ def selecionar_template(dias: int) -> str:
     else:
         return "lembrede_apos_vendimento"
 
-def send_whatsapp_template_message(numero: str, boleto: dict, template_name: str = None) -> Optional[str]:
+def send_whatsapp_template_message(numero: str, boleto: dict, template_name: str = None, whatsapp_phone_number_id: str = None, whatsapp_token: str = None) -> Optional[str]:
     """
     Envia mensagem usando template aprovado da Meta
     
@@ -122,11 +127,16 @@ def send_whatsapp_template_message(numero: str, boleto: dict, template_name: str
         numero: Numero de telefone (sem 'whatsapp:', apenas digitos)
         boleto: Dicionario com dados do boleto
         template_name: Nome do template a usar (se None, seleciona automaticamente)
+        whatsapp_phone_number_id: Phone Number ID do WhatsApp (opcional, usa global se não fornecido)
+        whatsapp_token: Token do WhatsApp (opcional, usa global se não fornecido)
     
     Returns:
         message_id se sucesso, None se falhar
     """
-    if not WHATSAPP_PHONE_NUMBER_ID or not WHATSAPP_TOKEN:
+    phone_number_id = whatsapp_phone_number_id or WHATSAPP_PHONE_NUMBER_ID
+    token = whatsapp_token or WHATSAPP_TOKEN
+    
+    if not phone_number_id or not token:
         logging.error("WHATSAPP_PHONE_NUMBER_ID ou WHATSAPP_TOKEN nao configurados")
         return None
     
@@ -183,7 +193,7 @@ def send_whatsapp_template_message(numero: str, boleto: dict, template_name: str
         pdf_content = baixar_pdf_boleto(titulo_id, parcela_id, pdf_url)
         
         if pdf_content:
-            media_id = fazer_upload_pdf(pdf_content, f"boleto_{titulo_id}_{parcela_id}.pdf")
+            media_id = fazer_upload_pdf(pdf_content, f"boleto_{titulo_id}_{parcela_id}.pdf", phone_number_id, token)
             
             if media_id:
                 header_component = {
@@ -230,9 +240,9 @@ def send_whatsapp_template_message(numero: str, boleto: dict, template_name: str
         }
     }
     
-    url = f"https://graph.facebook.com/v20.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
+    url = f"https://graph.facebook.com/v20.0/{phone_number_id}/messages"
     headers = {
-        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
     

@@ -364,3 +364,45 @@ def salvar_configuracao_sienge(dados_config: dict):
     except Exception as e:
         print(f"❌ Erro ao salvar configuração do Sienge: {e}")
         return None
+
+
+def atualizar_configuracao_whatsapp_empreendimento(enterprise_id: int, whatsapp_phone_number_id: str = None, whatsapp_token: str = None):
+    """
+    Atualiza configuração de WhatsApp de um empreendimento
+    """
+    if not supabase:
+        return None
+    
+    try:
+        update_data = {}
+        if whatsapp_phone_number_id is not None:
+            update_data["whatsapp_phone_number_id"] = whatsapp_phone_number_id
+        if whatsapp_token is not None:
+            update_data["whatsapp_token"] = whatsapp_token
+        
+        if not update_data:
+            return None
+        
+        response = supabase.table("empreendimentos_cobranca").update(update_data).eq("enterprise_id", enterprise_id).execute()
+        print(f"✅ Configuração WhatsApp do empreendimento {enterprise_id} atualizada")
+        return response.data[0] if response.data else None
+    except Exception as e:
+        print(f"❌ Erro ao atualizar configuração WhatsApp do empreendimento: {e}")
+        return None
+
+
+def buscar_configuracao_whatsapp_empreendimento(enterprise_id: int):
+    """
+    Busca configuração de WhatsApp de um empreendimento
+    """
+    if not supabase:
+        return None
+    
+    try:
+        response = supabase.table("empreendimentos_cobranca").select("whatsapp_phone_number_id", "whatsapp_token").eq("enterprise_id", enterprise_id).execute()
+        if response.data and len(response.data) > 0:
+            return response.data[0]
+        return None
+    except Exception as e:
+        print(f"❌ Erro ao buscar configuração WhatsApp do empreendimento: {e}")
+        return None
