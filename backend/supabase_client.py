@@ -444,15 +444,15 @@ def buscar_configuracao_whatsapp_empreendimento(enterprise_id: int):
 # FUNÇÕES DE GERENCIAMENTO DE CONFIGURAÇÕES WHATSAPP
 # ============================================================
 
-def listar_configuracoes_whatsapp(ativo_only: bool = False):
+def listar_configuracoes_whatsapp(supabase_client, ativo_only: bool = False):
     """
     Lista todas as configurações WhatsApp
     """
-    if not supabase:
+    if not supabase_client:
         return []
     
     try:
-        query = supabase.table("configuracoes_whatsapp").select("*")
+        query = supabase_client.table("configuracoes_whatsapp").select("*")
         
         if ativo_only:
             query = query.eq("ativo", True)
@@ -470,12 +470,12 @@ def listar_configuracoes_whatsapp(ativo_only: bool = False):
         return []
 
 
-def criar_configuracao_whatsapp(nome: str, whatsapp_phone_number_id: str, whatsapp_token: str):
+def criar_configuracao_whatsapp(supabase_client, nome: str, whatsapp_phone_number_id: str, whatsapp_token: str):
     """
     Cria uma nova configuração WhatsApp
     CRIPTOGRAFA o token antes de salvar
     """
-    if not supabase:
+    if not supabase_client:
         return None
     
     try:
@@ -492,7 +492,7 @@ def criar_configuracao_whatsapp(nome: str, whatsapp_phone_number_id: str, whatsa
             "ativo": True
         }
         
-        result = supabase.table("configuracoes_whatsapp").insert(data).execute()
+        result = supabase_client.table("configuracoes_whatsapp").insert(data).execute()
         print(f"✅ Configuração WhatsApp '{nome}' criada com sucesso")
         return result.data[0] if result.data else None
     except Exception as e:
@@ -500,12 +500,12 @@ def criar_configuracao_whatsapp(nome: str, whatsapp_phone_number_id: str, whatsa
         return None
 
 
-def atualizar_configuracao_whatsapp(config_id: int, nome: str = None, whatsapp_phone_number_id: str = None, whatsapp_token: str = None, ativo: bool = None):
+def atualizar_configuracao_whatsapp(supabase_client, config_id: int, nome: str = None, whatsapp_phone_number_id: str = None, whatsapp_token: str = None, ativo: bool = None):
     """
     Atualiza uma configuração WhatsApp existente
     CRIPTOGRAFA o token se fornecido
     """
-    if not supabase:
+    if not supabase_client:
         return None
     
     try:
@@ -530,7 +530,7 @@ def atualizar_configuracao_whatsapp(config_id: int, nome: str = None, whatsapp_p
         
         update_data["updated_at"] = datetime.utcnow().isoformat()
         
-        result = supabase.table("configuracoes_whatsapp").update(update_data).eq("id", config_id).execute()
+        result = supabase_client.table("configuracoes_whatsapp").update(update_data).eq("id", config_id).execute()
         print(f"✅ Configuração WhatsApp {config_id} atualizada")
         return result.data[0] if result.data else None
     except Exception as e:
@@ -538,19 +538,19 @@ def atualizar_configuracao_whatsapp(config_id: int, nome: str = None, whatsapp_p
         return None
 
 
-def deletar_configuracao_whatsapp(config_id: int):
+def deletar_configuracao_whatsapp(supabase_client, config_id: int):
     """
     Deleta uma configuração WhatsApp
     """
-    if not supabase:
+    if not supabase_client:
         return False
     
     try:
         # Primeiro, remover vínculos com empreendimentos
-        supabase.table("empreendimentos_cobranca").update({"whatsapp_config_id": None}).eq("whatsapp_config_id", config_id).execute()
+        supabase_client.table("empreendimentos_cobranca").update({"whatsapp_config_id": None}).eq("whatsapp_config_id", config_id).execute()
         
         # Depois, deletar a configuração
-        result = supabase.table("configuracoes_whatsapp").delete().eq("id", config_id).execute()
+        result = supabase_client.table("configuracoes_whatsapp").delete().eq("id", config_id).execute()
         print(f"✅ Configuração WhatsApp {config_id} deletada")
         return True
     except Exception as e:
@@ -558,11 +558,11 @@ def deletar_configuracao_whatsapp(config_id: int):
         return False
 
 
-def vincular_configuracao_empreendimento(enterprise_id: int, whatsapp_config_id: int = None):
+def vincular_configuracao_empreendimento(supabase_client, enterprise_id: int, whatsapp_config_id: int = None):
     """
     Vincula ou desvincula uma configuração WhatsApp a um empreendimento
     """
-    if not supabase:
+    if not supabase_client:
         return None
     
     try:
@@ -571,7 +571,7 @@ def vincular_configuracao_empreendimento(enterprise_id: int, whatsapp_config_id:
             "updated_at": datetime.utcnow().isoformat()
         }
         
-        result = supabase.table("empreendimentos_cobranca").update(update_data).eq("enterprise_id", enterprise_id).execute()
+        result = supabase_client.table("empreendimentos_cobranca").update(update_data).eq("enterprise_id", enterprise_id).execute()
         
         if whatsapp_config_id:
             print(f"✅ Empreendimento {enterprise_id} vinculado à configuração WhatsApp {whatsapp_config_id}")
