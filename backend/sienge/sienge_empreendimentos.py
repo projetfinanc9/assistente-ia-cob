@@ -188,11 +188,6 @@ def salvar_empreendimento_supabase(supabase_client, empreendimento_data: Dict) -
                 update_data["construction_details"] = empreendimento_data["constructionDetails"]
             if "salesDetails" in empreendimento_data:
                 update_data["sales_details"] = empreendimento_data["salesDetails"]
-            # Atualizar campos de WhatsApp se fornecidos
-            if "whatsapp_phone_number_id" in empreendimento_data:
-                update_data["whatsapp_phone_number_id"] = empreendimento_data["whatsapp_phone_number_id"]
-            if "whatsapp_token" in empreendimento_data:
-                update_data["whatsapp_token"] = empreendimento_data["whatsapp_token"]
             
             result = supabase_client.table("empreendimentos_cobranca").update(update_data).eq("enterprise_id", enterprise_id).execute()
             logging.info(f"🔄 Empreendimento {enterprise_id} atualizado no Supabase com enterprise_code {enterprise_id}")
@@ -222,11 +217,6 @@ def salvar_empreendimento_supabase(supabase_client, empreendimento_data: Dict) -
                 insert_data["construction_details"] = empreendimento_data["constructionDetails"]
             if "salesDetails" in empreendimento_data:
                 insert_data["sales_details"] = empreendimento_data["salesDetails"]
-            # Adicionar campos de WhatsApp se fornecidos
-            if "whatsapp_phone_number_id" in empreendimento_data:
-                insert_data["whatsapp_phone_number_id"] = empreendimento_data["whatsapp_phone_number_id"]
-            if "whatsapp_token" in empreendimento_data:
-                insert_data["whatsapp_token"] = empreendimento_data["whatsapp_token"]
             
             result = supabase_client.table("empreendimentos_cobranca").insert(insert_data).execute()
             logging.info(f"✅ Empreendimento {enterprise_id} criado no Supabase com enterprise_code {enterprise_id}")

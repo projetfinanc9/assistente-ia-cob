@@ -3117,12 +3117,23 @@ class EnterpriseStatusRequest(BaseModel):
 
 @app.get("/enterprises")
 def get_enterprises(ativo_only: bool = False):
-    """Lista empreendimentos do Supabase"""
+    """Lista empreendimentos do Supabase com configurações WhatsApp"""
     try:
         from supabase_client import supabase
         from sienge.sienge_empreendimentos import listar_empreendimentos_supabase
         
         empreendimentos = listar_empreendimentos_supabase(supabase, ativo_only)
+        
+        # Enriquecer com configurações WhatsApp
+        for emp in empreendimentos:
+            if emp.get("whatsapp_config_id"):
+                try:
+                    result = supabase.table("configuracoes_whatsapp").select("id", "nome", "whatsapp_phone_number_id", "ativo").eq("id", emp["whatsapp_config_id"]).execute()
+                    if result.data and len(result.data) > 0:
+                        emp["whatsapp_config"] = result.data[0]
+                except Exception as e:
+                    logging.warning(f"⚠️ Erro ao buscar config WhatsApp: {e}")
+        
         return {
             "success": True,
             "data": empreendimentos,
@@ -3179,30 +3190,153 @@ def update_enterprise_status(request: EnterpriseStatusRequest):
 
 class EnterpriseWhatsappConfigRequest(BaseModel):
     enterprise_id: int
-    whatsapp_phone_number_id: Optional[str] = None
-    whatsapp_token: Optional[str] = None
+    whatsapp_config_id: Optional[int] = None
 
 @app.post("/enterprises/whatsapp-config")
 def update_enterprise_whatsapp_config(request: EnterpriseWhatsappConfigRequest):
-    """Atualiza a configuração WhatsApp de um empreendimento"""
+    """Vincula ou desvincula uma configuração WhatsApp a um empreendimento"""
     try:
         from supabase_client import supabase
-        from supabase_client import atualizar_configuracao_whatsapp_empreendimento
+        from supabase_client import vincular_configuracao_empreendimento
         
-        empreendimento = atualizar_configuracao_whatsapp_empreendimento(
+        empreendimento = vincular_configuracao_empreendimento(
             supabase,
             request.enterprise_id,
-            request.whatsapp_phone_number_id,
-            request.whatsapp_token
+            request.whatsapp_config_id
         )
+        
+        if request.whatsapp_config_id:
+            message = "Configuração WhatsApp vinculada com sucesso"
+        else:
+            message = "Configuração WhatsApp desvinculada com sucesso"
         
         return {
             "success": True,
             "data": empreendimento,
+            "message": message
+        }
+    except Exception as e:
+        logging.error(f"❌ Erro ao vincular configuração WhatsApp ao empreendimento: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================
+# API DE CONFIGURAÇÕES WHATSAPP
+# ============================================================
+
+class WhatsappConfigRequest(BaseModel):
+    nome: str
+    whatsapp_phone_number_id: str
+    whatsapp_token: str
+
+class WhatsappConfigUpdateRequest(BaseModel):
+    nome: Optional[str] = None
+    whatsapp_phone_number_id: Optional[str] = None
+    whatsapp_token: Optional[str] = None
+    ativo: Optional[bool] = None
+
+@app.get("/whatsapp-configs")
+def list_whatsapp_configs(ativo_only: bool = False):
+    """Lista todas as configurações WhatsApp"""
+    try:
+        from supabase_client import supabase
+        from supabase_client import listar_configuracoes_whatsapp
+        
+        configs = listar_configuracoes_whatsapp(supabase, ativo_only)
+        
+        # Remover tokens da resposta por segurança
+        safe_configs = []
+        for config in configs:
+            safe_config = config.copy()
+            safe_config["whatsapp_token"] = "***" if config.get("whatsapp_token") else None
+            safe_configs.append(safe_config)
+        
+        return {
+            "success": True,
+            "data": safe_configs,
+            "total": len(safe_configs)
+        }
+    except Exception as e:
+        logging.error(f"❌ Erro ao listar configurações WhatsApp: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.post("/whatsapp-configs")
+def create_whatsapp_config(request: WhatsappConfigRequest):
+    """Cria uma nova configuração WhatsApp"""
+    try:
+        from supabase_client import supabase
+        from supabase_client import criar_configuracao_whatsapp
+        
+        config = criar_configuracao_whatsapp(
+            supabase,
+            request.nome,
+            request.whatsapp_phone_number_id,
+            request.whatsapp_token
+        )
+        
+        # Remover token da resposta por segurança
+        safe_config = config.copy()
+        safe_config["whatsapp_token"] = "***"
+        
+        return {
+            "success": True,
+            "data": safe_config,
+            "message": f"Configuração WhatsApp '{request.nome}' criada com sucesso"
+        }
+    except Exception as e:
+        logging.error(f"❌ Erro ao criar configuração WhatsApp: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.put("/whatsapp-configs/{config_id}")
+def update_whatsapp_config(config_id: int, request: WhatsappConfigUpdateRequest):
+    """Atualiza uma configuração WhatsApp existente"""
+    try:
+        from supabase_client import supabase
+        from supabase_client import atualizar_configuracao_whatsapp
+        
+        config = atualizar_configuracao_whatsapp(
+            supabase,
+            config_id,
+            request.nome,
+            request.whatsapp_phone_number_id,
+            request.whatsapp_token,
+            request.ativo
+        )
+        
+        # Remover token da resposta por segurança
+        safe_config = config.copy()
+        safe_config["whatsapp_token"] = "***"
+        
+        return {
+            "success": True,
+            "data": safe_config,
             "message": "Configuração WhatsApp atualizada com sucesso"
         }
     except Exception as e:
-        logging.error(f"❌ Erro ao atualizar configuração WhatsApp do empreendimento: {e}")
+        logging.error(f"❌ Erro ao atualizar configuração WhatsApp: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.delete("/whatsapp-configs/{config_id}")
+def delete_whatsapp_config(config_id: int):
+    """Deleta uma configuração WhatsApp"""
+    try:
+        from supabase_client import supabase
+        from supabase_client import deletar_configuracao_whatsapp
+        
+        success = deletar_configuracao_whatsapp(supabase, config_id)
+        
+        if success:
+            return {
+                "success": True,
+                "message": "Configuração WhatsApp deletada com sucesso"
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Não foi possível deletar a configuração"
+            }
+    except Exception as e:
+        logging.error(f"❌ Erro ao deletar configuração WhatsApp: {e}")
         return {"success": False, "error": str(e)}
 
 @app.get("/enterprises/logs")

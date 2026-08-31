@@ -402,35 +402,7 @@ def salvar_configuracao_sienge(dados_config: dict):
         return None
 
 
-def atualizar_configuracao_whatsapp_empreendimento(enterprise_id: int, whatsapp_phone_number_id: str = None, whatsapp_token: str = None):
-    """
-    Atualiza configuração de WhatsApp de um empreendimento
-    CRIPTOGRAFA o token antes de salvar
-    """
-    if not supabase:
-        return None
-    
-    try:
-        update_data = {}
-        if whatsapp_phone_number_id is not None:
-            update_data["whatsapp_phone_number_id"] = whatsapp_phone_number_id
-        if whatsapp_token is not None:
-            # Criptografar token antes de salvar
-            encrypted_token = encrypt_token(whatsapp_token)
-            if encrypted_token:
-                update_data["whatsapp_token"] = encrypted_token
-            else:
-                print("⚠️ Não foi possível criptografar o token, não salvando")
-        
-        if not update_data:
-            return None
-        
-        response = supabase.table("empreendimentos_cobranca").update(update_data).eq("enterprise_id", enterprise_id).execute()
-        print(f"✅ Configuração WhatsApp do empreendimento {enterprise_id} atualizada (token criptografado)")
-        return response.data[0] if response.data else None
-    except Exception as e:
-        print(f"❌ Erro ao atualizar configuração WhatsApp do empreendimento: {e}")
-        return None
+
 
 
 def buscar_configuracao_whatsapp_empreendimento(enterprise_id: int):
@@ -442,19 +414,171 @@ def buscar_configuracao_whatsapp_empreendimento(enterprise_id: int):
         return None
     
     try:
-        response = supabase.table("empreendimentos_cobranca").select("whatsapp_phone_number_id", "whatsapp_token").eq("enterprise_id", enterprise_id).execute()
+        # Buscar empreendimento com sua configuração WhatsApp
+        response = supabase.table("empreendimentos_cobranca").select(
+            "whatsapp_config_id",
+            "configuracoes_whatsapp!inner(id, nome, whatsapp_phone_number_id, whatsapp_token, ativo)"
+        ).eq("enterprise_id", enterprise_id).execute()
+        
         if response.data and len(response.data) > 0:
-            config = response.data[0]
-            # Descriptografar token para uso
-            if config.get("whatsapp_token"):
-                decrypted_token = decrypt_token(config["whatsapp_token"])
-                if decrypted_token:
-                    config["whatsapp_token"] = decrypted_token
-                else:
-                    print(f"⚠️ Não foi possível descriptografar token do empreendimento {enterprise_id}")
-                    config["whatsapp_token"] = None
-            return config
+            empreendimento = response.data[0]
+            config_whatsapp = empreendimento.get("configuracoes_whatsapp")
+            
+            if config_whatsapp:
+                # Descriptografar token para uso
+                if config_whatsapp.get("whatsapp_token"):
+                    decrypted_token = decrypt_token(config_whatsapp["whatsapp_token"])
+                    if decrypted_token:
+                        config_whatsapp["whatsapp_token"] = decrypted_token
+                    else:
+                        print(f"⚠️ Não foi possível descriptografar token da configuração {config_whatsapp.get('id')}")
+                        config_whatsapp["whatsapp_token"] = None
+                return config_whatsapp
         return None
     except Exception as e:
         print(f"❌ Erro ao buscar configuração WhatsApp do empreendimento: {e}")
+        return None
+
+
+# ============================================================
+# FUNÇÕES DE GERENCIAMENTO DE CONFIGURAÇÕES WHATSAPP
+# ============================================================
+
+def listar_configuracoes_whatsapp(ativo_only: bool = False):
+    """
+    Lista todas as configurações WhatsApp
+    """
+    if not supabase:
+        return []
+    
+    try:
+        query = supabase.table("configuracoes_whatsapp").select("*")
+        
+        if ativo_only:
+            query = query.eq("ativo", True)
+        
+        query = query.order("nome")
+        
+        result = query.execute()
+        print(f"📋 {len(result.data)} configurações WhatsApp listadas")
+        
+        # Descriptografar tokens para exibição (não recomendado em produção)
+        # Em produção, não descriptografar na listagem
+        return result.data if result.data else []
+    except Exception as e:
+        print(f"❌ Erro ao listar configurações WhatsApp: {e}")
+        return []
+
+
+def criar_configuracao_whatsapp(nome: str, whatsapp_phone_number_id: str, whatsapp_token: str):
+    """
+    Cria uma nova configuração WhatsApp
+    CRIPTOGRAFA o token antes de salvar
+    """
+    if not supabase:
+        return None
+    
+    try:
+        # Criptografar token
+        encrypted_token = encrypt_token(whatsapp_token)
+        if not encrypted_token:
+            print("❌ Não foi possível criptografar o token")
+            return None
+        
+        data = {
+            "nome": nome,
+            "whatsapp_phone_number_id": whatsapp_phone_number_id,
+            "whatsapp_token": encrypted_token,
+            "ativo": True
+        }
+        
+        result = supabase.table("configuracoes_whatsapp").insert(data).execute()
+        print(f"✅ Configuração WhatsApp '{nome}' criada com sucesso")
+        return result.data[0] if result.data else None
+    except Exception as e:
+        print(f"❌ Erro ao criar configuração WhatsApp: {e}")
+        return None
+
+
+def atualizar_configuracao_whatsapp(config_id: int, nome: str = None, whatsapp_phone_number_id: str = None, whatsapp_token: str = None, ativo: bool = None):
+    """
+    Atualiza uma configuração WhatsApp existente
+    CRIPTOGRAFA o token se fornecido
+    """
+    if not supabase:
+        return None
+    
+    try:
+        update_data = {}
+        
+        if nome is not None:
+            update_data["nome"] = nome
+        if whatsapp_phone_number_id is not None:
+            update_data["whatsapp_phone_number_id"] = whatsapp_phone_number_id
+        if whatsapp_token is not None:
+            # Criptografar token
+            encrypted_token = encrypt_token(whatsapp_token)
+            if encrypted_token:
+                update_data["whatsapp_token"] = encrypted_token
+            else:
+                print("⚠️ Não foi possível criptografar o token, não atualizando")
+        if ativo is not None:
+            update_data["ativo"] = ativo
+        
+        if not update_data:
+            return None
+        
+        update_data["updated_at"] = datetime.utcnow().isoformat()
+        
+        result = supabase.table("configuracoes_whatsapp").update(update_data).eq("id", config_id).execute()
+        print(f"✅ Configuração WhatsApp {config_id} atualizada")
+        return result.data[0] if result.data else None
+    except Exception as e:
+        print(f"❌ Erro ao atualizar configuração WhatsApp: {e}")
+        return None
+
+
+def deletar_configuracao_whatsapp(config_id: int):
+    """
+    Deleta uma configuração WhatsApp
+    """
+    if not supabase:
+        return False
+    
+    try:
+        # Primeiro, remover vínculos com empreendimentos
+        supabase.table("empreendimentos_cobranca").update({"whatsapp_config_id": None}).eq("whatsapp_config_id", config_id).execute()
+        
+        # Depois, deletar a configuração
+        result = supabase.table("configuracoes_whatsapp").delete().eq("id", config_id).execute()
+        print(f"✅ Configuração WhatsApp {config_id} deletada")
+        return True
+    except Exception as e:
+        print(f"❌ Erro ao deletar configuração WhatsApp: {e}")
+        return False
+
+
+def vincular_configuracao_empreendimento(enterprise_id: int, whatsapp_config_id: int = None):
+    """
+    Vincula ou desvincula uma configuração WhatsApp a um empreendimento
+    """
+    if not supabase:
+        return None
+    
+    try:
+        update_data = {
+            "whatsapp_config_id": whatsapp_config_id,
+            "updated_at": datetime.utcnow().isoformat()
+        }
+        
+        result = supabase.table("empreendimentos_cobranca").update(update_data).eq("enterprise_id", enterprise_id).execute()
+        
+        if whatsapp_config_id:
+            print(f"✅ Empreendimento {enterprise_id} vinculado à configuração WhatsApp {whatsapp_config_id}")
+        else:
+            print(f"✅ Empreendimento {enterprise_id} desvinculado de configuração WhatsApp")
+        
+        return result.data[0] if result.data else None
+    except Exception as e:
+        print(f"❌ Erro ao vincular configuração WhatsApp ao empreendimento: {e}")
         return None

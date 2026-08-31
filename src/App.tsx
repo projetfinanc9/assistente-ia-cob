@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import History from "./pages/History";
 import Messages from "./pages/Messages";
 import Enterprises from "./pages/Enterprises";
+import WhatsAppConfigs from "./pages/WhatsAppConfigs";
 import NotFound from "./pages/NotFound";
 import DashboardLayout from "./layouts/DashboardLayout";
 
@@ -27,6 +28,7 @@ const App = () => (
             <Route path="messages" element={<Messages />} />
             <Route path="cobranca-config" element={<CobrancaConfig />} />
             <Route path="enterprises" element={<Enterprises />} />
+            <Route path="whatsapp-configs" element={<WhatsAppConfigs />} />
             <Route path="settings" element={<Settings />} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

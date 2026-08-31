@@ -27,8 +27,13 @@ interface Enterprise {
   created_at: string;
   updated_at: string;
   address?: string;
-  whatsapp_phone_number_id?: string;
-  whatsapp_token?: string;
+  whatsapp_config_id?: number;
+  whatsapp_config?: {
+    id: number;
+    nome: string;
+    whatsapp_phone_number_id: string;
+    ativo: boolean;
+  };
 }
 
 interface SyncLog {
@@ -62,9 +67,10 @@ export default function Enterprises() {
   // WhatsApp configuration dialog
   const [whatsappDialogOpen, setWhatsappDialogOpen] = useState(false);
   const [selectedEnterpriseForWhatsapp, setSelectedEnterpriseForWhatsapp] = useState<Enterprise | null>(null);
-  const [whatsappPhoneNumberId, setWhatsappPhoneNumberId] = useState('');
-  const [whatsappToken, setWhatsappToken] = useState('');
+  const [whatsappConfigs, setWhatsappConfigs] = useState<any[]>([]);
+  const [selectedWhatsappConfigId, setSelectedWhatsappConfigId] = useState<number | null>(null);
   const [savingWhatsapp, setSavingWhatsapp] = useState(false);
+  const [loadingConfigs, setLoadingConfigs] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -211,10 +217,26 @@ export default function Enterprises() {
     }
   };
 
-  const openWhatsappDialog = (enterprise: Enterprise) => {
+  const loadWhatsappConfigs = async () => {
+    try {
+      setLoadingConfigs(true);
+      const response = await fetch(`${API_URL}/whatsapp-configs`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setWhatsappConfigs(data.data);
+      }
+    } catch (err) {
+      console.error('Erro ao carregar configurações WhatsApp:', err);
+    } finally {
+      setLoadingConfigs(false);
+    }
+  };
+
+  const openWhatsappDialog = async (enterprise: Enterprise) => {
     setSelectedEnterpriseForWhatsapp(enterprise);
-    setWhatsappPhoneNumberId(enterprise.whatsapp_phone_number_id || '');
-    setWhatsappToken(enterprise.whatsapp_token || '');
+    setSelectedWhatsappConfigId(enterprise.whatsapp_config_id || null);
+    await loadWhatsappConfigs();
     setWhatsappDialogOpen(true);
   };
 
@@ -230,19 +252,18 @@ export default function Enterprises() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           enterprise_id: selectedEnterpriseForWhatsapp.enterprise_id,
-          whatsapp_phone_number_id: whatsappPhoneNumberId || null,
-          whatsapp_token: whatsappToken || null
+          whatsapp_config_id: selectedWhatsappConfigId
         })
       });
       
       const data = await response.json();
       
       if (data.success) {
-        setSuccess('Configuração WhatsApp salva com sucesso');
+        setSuccess(selectedWhatsappConfigId ? 'Configuração WhatsApp vinculada com sucesso' : 'Configuração WhatsApp desvinculada com sucesso');
         setWhatsappDialogOpen(false);
         await loadEnterprises();
       } else {
-        setError(data.error || 'Erro ao salvar configuração WhatsApp');
+        setError(data.error || 'Erro ao vincular configuração WhatsApp');
       }
     } catch (err) {
       setError('Erro ao conectar com o servidor');
@@ -653,10 +674,10 @@ export default function Enterprises() {
                         </div>
                       </td>
                       <td className="p-3">
-                        {enterprise.whatsapp_phone_number_id ? (
-                          <Badge className="bg-green-100 text-green-800 gap-1">
+                        {enterprise.whatsapp_config ? (
+                          <Badge className="bg-green-100 text-green-800 gap-1 cursor-pointer" onClick={() => openWhatsappDialog(enterprise)}>
                             <Phone className="h-3 w-3" />
-                            Configurado
+                            {enterprise.whatsapp_config.nome}
                           </Badge>
                         ) : (
                           <Button
@@ -666,7 +687,7 @@ export default function Enterprises() {
                             className="h-6 text-xs"
                           >
                             <Settings className="h-3 w-3 mr-1" />
-                            Configurar
+                            Vincular
                           </Button>
                         )}
                       </td>
@@ -694,10 +715,10 @@ export default function Enterprises() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Phone className="h-5 w-5" />
-              Configurar WhatsApp
+              Vincular Configuração WhatsApp
             </DialogTitle>
             <DialogDescription>
-              Configure as credenciais do WhatsApp Business API para este empreendimento
+              Selecione uma configuração WhatsApp para este empreendimento
             </DialogDescription>
           </DialogHeader>
           
@@ -708,29 +729,28 @@ export default function Enterprises() {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="whatsapp-phone-number-id">WhatsApp Phone Number ID</Label>
-                <Input
-                  id="whatsapp-phone-number-id"
-                  placeholder="Ex: 1197028640168563"
-                  value={whatsappPhoneNumberId}
-                  onChange={(e) => setWhatsappPhoneNumberId(e.target.value)}
-                />
+                <Label htmlFor="whatsapp-config">Configuração WhatsApp</Label>
+                {loadingConfigs ? (
+                  <div className="text-sm text-muted-foreground">Carregando configurações...</div>
+                ) : (
+                  <select
+                    id="whatsapp-config"
+                    value={selectedWhatsappConfigId || ''}
+                    onChange={(e) => setSelectedWhatsappConfigId(e.target.value ? parseInt(e.target.value) : null)}
+                    className="w-full px-3 py-2 border rounded-md bg-background"
+                  >
+                    <option value="">Nenhuma (usar configuração global)</option>
+                    {whatsappConfigs
+                      .filter(config => config.ativo)
+                      .map((config) => (
+                        <option key={config.id} value={config.id}>
+                          {config.nome} ({config.whatsapp_phone_number_id})
+                        </option>
+                      ))}
+                  </select>
+                )}
                 <p className="text-xs text-muted-foreground">
-                  ID do número de telefone do WhatsApp Business API (Meta)
-                </p>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="whatsapp-token">WhatsApp Token (opcional)</Label>
-                <Input
-                  id="whatsapp-token"
-                  type="password"
-                  placeholder="Deixe em branco para usar o token global"
-                  value={whatsappToken}
-                  onChange={(e) => setWhatsappToken(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Token de acesso do WhatsApp. Se deixado em branco, usará o token global configurado no sistema
+                  Selecione uma configuração ou deixe vazio para usar a configuração global
                 </p>
               </div>
               
