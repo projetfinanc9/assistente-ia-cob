@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Bell, TrendingUp, Clock, CheckCircle } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -175,15 +176,15 @@ const Dashboard = () => {
             <CardTitle>Ações Rápidas</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <a
-              href="/cobranca-config"
+            <Link
+              to="/cobranca-config"
               className="block p-4 border rounded-lg hover:bg-muted transition"
             >
               <div className="font-medium">Abrir Cobrança</div>
               <div className="text-sm text-muted-foreground">
                 Selecionar clientes com parcelas em aberto
               </div>
-            </a>
+            </Link>
             <a
               href="/dashboard/history"
               className="block p-4 border rounded-lg hover:bg-muted transition"
