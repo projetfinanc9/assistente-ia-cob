@@ -38,9 +38,11 @@ from sienge.sienge_cobranca import (
 logging.basicConfig(level=logging.INFO)
 logging.warning("🔄 MAIN.PY CARREGADO - VERSÃO COM LOGS WARNING NO TESTAR-COBRANCA")
 from zenvia_piloto import router as zenvia_piloto_router
+from zenvia_envios import router as zenvia_envios_router
 
 app = FastAPI()
 app.include_router(zenvia_piloto_router)
+app.include_router(zenvia_envios_router)
 
 # ============================================================
 # 🌐 CONFIGURAÇÃO CORS
