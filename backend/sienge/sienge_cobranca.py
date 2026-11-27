@@ -216,7 +216,13 @@ def tem_boleto_apto(titulo_id: int, installment_id: int) -> tuple[bool, str | No
     return True, None
 
 
-def listar_parcelas_por_periodo_bulk(data_inicio: str, data_fim: str, cost_centers_ids: Optional[List[int]] = None) -> List[Dict]:
+def listar_parcelas_por_periodo_bulk(
+    data_inicio: str,
+    data_fim: str,
+    cost_centers_ids: Optional[List[int]] = None,
+    *,
+    somente_consulta: bool = False,
+) -> List[Dict]:
     """
     Usa API Bulk-data para buscar parcelas por período de vencimento.
     Economia massiva de requisições comparado à API tradicional.
@@ -231,7 +237,7 @@ def listar_parcelas_por_periodo_bulk(data_inicio: str, data_fim: str, cost_cente
     cache_key = f"bulk_parcelas_{data_inicio}_{data_fim}{cache_key_suffix}"
     
     # Tentar obter do cache
-    dados_cache = obter_dados_cache(cache_key, validade_horas=1)  # Cache de 1h para dados de período
+    dados_cache = None if somente_consulta else obter_dados_cache(cache_key, validade_horas=1)
     if dados_cache is not None:
         logging.warning(f"📦 Cache hit para bulk data {data_inicio} a {data_fim}")
         return dados_cache
@@ -251,10 +257,16 @@ def listar_parcelas_por_periodo_bulk(data_inicio: str, data_fim: str, cost_cente
     
     logging.warning(f"🔍 Buscando parcelas via Bulk-data: {data_inicio} a {data_fim}")
     logging.warning(f"🔗 URL: {url}")
-    logging.warning(f"🔑 Headers: {json_headers}")
     logging.warning(f"📋 Params: {params}")
     r = requests.get(url, headers=json_headers, params=params, timeout=60)
     
+    if somente_consulta:
+        r.raise_for_status()
+        parcelas = r.json().get("data")
+        if not isinstance(parcelas, list) or any(not isinstance(item, dict) for item in parcelas):
+            raise ValueError("Formato inesperado na consulta de parcelas do Sienge")
+        return parcelas
+
     if r.status_code != 200:
         logging.warning(f"⚠️ Erro ao buscar bulk data: {r.status_code}")
         logging.warning(f"⚠️ Response: {r.text[:500]}")
