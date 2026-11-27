@@ -59,7 +59,7 @@ const Dashboard = () => {
       <div>
         <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
         <p className="text-muted-foreground">
-          Visão geral do sistema de cobrança automática
+          Visão geral das cobranças
         </p>
       </div>
 
@@ -164,7 +164,7 @@ const Dashboard = () => {
                   : `${stats.totalEnvios} envios registrados`}
               </p>
               <p className="text-sm mt-2">
-                Configure suas regras de cobrança em Configurações de Cobrança
+                Consulte os clientes com parcelas em aberto na tela de Cobrança
               </p>
             </div>
           </CardContent>
@@ -176,12 +176,12 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent className="space-y-2">
             <a
-              href="/dashboard/cobranca-config"
+              href="/cobranca-config"
               className="block p-4 border rounded-lg hover:bg-muted transition"
             >
-              <div className="font-medium">Configurar Cobrança</div>
+              <div className="font-medium">Abrir Cobrança</div>
               <div className="text-sm text-muted-foreground">
-                Definir regras de lembretes automáticos
+                Selecionar clientes com parcelas em aberto
               </div>
             </a>
             <a
