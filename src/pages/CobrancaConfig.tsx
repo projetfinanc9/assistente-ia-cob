@@ -1,436 +1,193 @@
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, type FormEvent } from "react";
+import { ClipboardList, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Save, Loader2, Eye, Edit, X } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-interface Lembrete {
-  dias_antes: number;
-  mensagem: string;
-  enviar_segunda_via: boolean;
-  envio_pdf: boolean;
-}
+type Parcela = { titulo: string; parcela: string; vencimento: string; saldo: string };
+type Cliente = { id: string; nome: string; saldo: string; parcelas: Parcela[] };
 
-interface ConfigCobranca {
-  ativo: boolean;
-  horario_execucao: string;
-  lembretes: Lembrete[];
-  mensagem_atendimento: string;
-}
+const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const moeda = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const formatarData = (data: string) => data.split("-").reverse().join("/");
+const normalizar = (texto: string) => texto.toLocaleLowerCase("pt-BR").normalize("NFD").replace(/\p{Diacritic}/gu, "");
 
-const CobrancaConfig = () => {
-  const [config, setConfig] = useState<ConfigCobranca>({
-    ativo: false,
-    horario_execucao: "09:00",
-    mensagem_atendimento: "Olá, esse número é usado apenas para envio automático. Caso tenha alguma dúvida, fale com um de nossos atendentes pelo número (91) 9999-9999",
-    lembretes: [
-      {
-        dias_antes: 5,
-        mensagem: "Olá {cliente}, seu boleto vence em {dias} dias. Valor: R$ {valor}",
-        enviar_segunda_via: true,
-        envio_pdf: true,
-      },
-      {
-        dias_antes: 1,
-        mensagem: "Olá {cliente}, seu boleto vence amanhã! Valor: R$ {valor}",
-        enviar_segunda_via: true,
-        envio_pdf: true,
-      },
-    ],
+export default function CobrancaConfig() {
+  const [clientes, setClientes] = useState<Cliente[] | null>(null);
+  const [selecionados, setSelecionados] = useState(new Set<string>());
+  const [busca, setBusca] = useState("");
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState("");
+  const [revisar, setRevisar] = useState(false);
+
+  const visiveis = (clientes ?? []).filter((cliente) => {
+    const termo = normalizar(busca.trim());
+    return normalizar(cliente.nome).includes(termo) || cliente.id.includes(termo) ||
+      cliente.parcelas.some(({ titulo }) => titulo.includes(termo));
   });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
-  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [editingLembrete, setEditingLembrete] = useState<Lembrete | null>(null);
+  const selecao = (clientes ?? []).filter(({ id }) => selecionados.has(id));
+  const totalSelecionado = selecao.reduce((total, cliente) => total + Number(cliente.saldo), 0);
+  const todosVisiveis = visiveis.length > 0 && visiveis.every(({ id }) => selecionados.has(id));
 
-  useEffect(() => {
-    loadConfig();
-  }, []);
-
-  const loadConfig = async () => {
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
-    try {
-      const response = await fetch(`${API_URL}/cobranca-config`);
-      const data = await response.json();
-      console.log('📥 Configuração carregada do backend:', data);
-      console.log('📋 Lembretes carregados:', data.lembretes);
-      
-      // Garantir que lembretes tenham os campos novos
-      if (data.lembretes) {
-        const lembretesComCampos = data.lembretes.map((lembrete: any) => ({
-          ...lembrete,
-          envio_pdf: lembrete.envio_pdf ?? false,
-        }));
-        data.lembretes = lembretesComCampos;
-        console.log('📋 Lembretes com campos novos:', lembretesComCampos);
-      }
-      
-      setConfig(data);
-    } catch (error) {
-      console.error('Erro ao carregar configuração:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const saveConfig = async () => {
-    setSaving(true);
-    setMessage('');
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
-    console.log('📝 Tentando salvar configuração:', config);
-    console.log('📋 Lembretes sendo salvos:', config.lembretes);
-    console.log('📝 Mensagem de atendimento sendo salva:', config.mensagem_atendimento);
-    console.log('🌐 API URL:', API_URL);
-    try {
-      console.log('📡 Fazendo requisição POST para:', `${API_URL}/cobranca-config`);
-      const response = await fetch(`${API_URL}/cobranca-config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config),
+  function selecionar(ids: string[], marcado: boolean) {
+    setSelecionados((anteriores) => {
+      const atualizados = new Set(anteriores);
+      ids.forEach((id) => {
+        if (marcado) atualizados.add(id);
+        else atualizados.delete(id);
       });
-      console.log('📊 Status da resposta:', response.status);
-      const data = await response.json();
-      console.log('📦 Dados da resposta:', data);
-      if (data.success) {
-        setMessage('✅ Configurações salvas com sucesso!');
-        // Recarregar configuração do Supabase
-        await loadConfig();
-      } else {
-        setMessage(`❌ Erro: ${data.error}`);
+      return atualizados;
+    });
+  }
+
+  async function consultar(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const campos = new FormData(event.currentTarget);
+    const query = new URLSearchParams({
+      centro_custo: String(campos.get("centro_custo")),
+      inicio: String(campos.get("inicio")),
+      fim: String(campos.get("fim")),
+      apenas_vencidas: String(campos.has("apenas_vencidas")),
+    });
+    setCarregando(true);
+    setErro("");
+    setClientes(null);
+    setBusca("");
+    setSelecionados(new Set());
+    try {
+      const resposta = await fetch(`${apiUrl}/zenvia/cobranca-manual/clientes?${query}`, {
+        headers: { "X-Zenvia-Preview-Key": String(campos.get("chave")) },
+        cache: "no-store",
+      });
+      if (!resposta.ok) {
+        const dados = await resposta.json();
+        setErro(typeof dados.detail === "string" ? dados.detail : "Confira os filtros da consulta.");
+        return;
       }
-    } catch (error) {
-      console.error('❌ Erro ao salvar configurações:', error);
-      setMessage('❌ Erro ao salvar configurações');
+      setClientes(await resposta.json());
+    } catch {
+      setErro("Não foi possível consultar os clientes do Sienge.");
     } finally {
-      setSaving(false);
+      setCarregando(false);
     }
-  };
-
-  const addLembrete = () => {
-    setConfig({
-      ...config,
-      lembretes: [
-        ...config.lembretes,
-        {
-          dias_antes: 3,
-          mensagem: "Lembrete padrão",
-          enviar_segunda_via: true,
-          envio_pdf: true,
-        },
-      ],
-    });
-  };
-
-  const removeLembrete = (index: number) => {
-    setConfig({
-      ...config,
-      lembretes: config.lembretes.filter((_, i) => i !== index),
-    });
-  };
-
-  const updateLembrete = (index: number, field: keyof Lembrete, value: any) => {
-    const newLembretes = [...config.lembretes];
-    newLembretes[index] = { ...newLembretes[index], [field]: value };
-    setConfig({ ...config, lembretes: newLembretes });
-  };
-
-  const previewMessage = (mensagem: string) => {
-    return mensagem
-      .replace(/{cliente}/g, "João Silva")
-      .replace(/{dias}/g, "5")
-      .replace(/{valor}/g, "R$ 1.234,56")
-      .replace(/{vencimento}/g, "15/07/2026");
-  };
-
-  const openEditModal = (index: number) => {
-    setEditingIndex(index);
-    setEditingLembrete({ ...config.lembretes[index] });
-  };
-
-  const closeEditModal = () => {
-    setEditingIndex(null);
-    setEditingLembrete(null);
-  };
-
-  const saveEditedLembrete = () => {
-    if (editingIndex !== null && editingLembrete) {
-      const newLembretes = [...config.lembretes];
-      newLembretes[editingIndex] = editingLembrete;
-      setConfig({ ...config, lembretes: newLembretes });
-      closeEditModal();
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="p-6 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin" />
-      </div>
-    );
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold mb-2">Configuração de Cobrança Automática</h1>
-        <p className="text-muted-foreground">
-          Configure lembretes automáticos de cobrança via WhatsApp
-        </p>
-      </div>
+    <main className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
+      <header>
+        <h1 className="text-3xl font-bold tracking-tight">Cobrança manual</h1>
+        <p className="mt-1 text-muted-foreground">Consulte as parcelas em aberto no Sienge e escolha os clientes da cobrança.</p>
+      </header>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Status do Sistema</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <Label htmlFor="ativo">Cobrança Automática</Label>
-              <p className="text-sm text-muted-foreground">
-                Ative para enviar lembretes automaticamente
-              </p>
-            </div>
-            <Switch
-              id="ativo"
-              checked={config.ativo}
-              onCheckedChange={(checked) => setConfig({ ...config, ativo: checked })}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="horario">Horário de Execução</Label>
-            <Input
-              id="horario"
-              type="time"
-              value={config.horario_execucao}
-              onChange={(e) => setConfig({ ...config, horario_execucao: e.target.value })}
-            />
-            <p className="text-sm text-muted-foreground">
-              Horário em que o sistema verificará boletos vencendo todos os dias
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Lembretes de Cobrança</CardTitle>
-          <CardDescription>
-            Configure quando e como enviar lembretes de cobrança
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {config.lembretes.map((lembrete, index) => (
-            <div key={index} className="flex items-center justify-between border rounded-lg p-4 hover:bg-muted/50">
-              <div className="flex-1">
-                <div className="flex items-center gap-4">
-                  <span className="font-semibold">Lembrete #{index + 1}</span>
-                  <Badge variant="outline">
-                    {lembrete.dias_antes > 0 ? `+${lembrete.dias_antes} dias após` : 
-                     lembrete.dias_antes < 0 ? `${lembrete.dias_antes} dias antes` : 
-                     'Dia do vencimento'}
-                  </Badge>
-                </div>
-                <p className="text-sm text-muted-foreground mt-1 truncate max-w-md">
-                  {lembrete.mensagem}
-                </p>
-                <div className="flex items-center gap-2 mt-2">
-                  {lembrete.envio_pdf && <Badge variant="secondary">PDF</Badge>}
-                </div>
+        <CardHeader><CardTitle>Consultar clientes</CardTitle></CardHeader>
+        <CardContent>
+          <form onSubmit={consultar} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="space-y-1">
+                <Label htmlFor="centro">ID do centro de custo</Label>
+                <Input id="centro" name="centro_custo" type="number" min="1" required />
               </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => openEditModal(index)}
-                >
-                  <Edit className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => removeLembrete(index)}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
+              <div className="space-y-1">
+                <Label htmlFor="inicio">Vencimento de</Label>
+                <Input id="inicio" name="inicio" type="date" required />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="fim">Vencimento até</Label>
+                <Input id="fim" name="fim" type="date" required />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="chave">Chave de acesso</Label>
+                <Input id="chave" name="chave" type="password" autoComplete="off" required />
               </div>
             </div>
-          ))}
-
-          <Button onClick={addLembrete} variant="outline" className="w-full">
-            <Plus className="w-4 h-4 mr-2" />
-            Adicionar Lembrete
-          </Button>
+            <div className="flex flex-wrap items-center gap-4">
+              <Label className="flex items-center gap-2">
+                <input name="apenas_vencidas" type="checkbox" className="accent-primary" />
+                Apenas parcelas vencidas
+              </Label>
+              <Button type="submit" disabled={carregando}>
+                <Search className="mr-2 h-4 w-4" />{carregando ? "Consultando…" : "Buscar no Sienge"}
+              </Button>
+            </div>
+          </form>
+          {erro && <p className="mt-4 text-sm text-destructive" role="alert">{erro}</p>}
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Mensagem de Atendimento</CardTitle>
-          <CardDescription>
-            Mensagem enviada automaticamente quando alguém envia mensagem para o número de cobrança
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="mensagem_atendimento">Mensagem de Atendimento</Label>
-            <Textarea
-              id="mensagem_atendimento"
-              value={config.mensagem_atendimento}
-              onChange={(e) => setConfig({ ...config, mensagem_atendimento: e.target.value })}
-              placeholder="Digite a mensagem que será enviada automaticamente..."
-              rows={3}
-              className="resize-none"
-            />
-            <p className="text-sm text-muted-foreground">
-              Esta mensagem será enviada quando alguém tentar interagir com o número de cobrança automática
+      {clientes && (
+        <Card>
+          <CardHeader><CardTitle>Clientes com parcelas em aberto</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="min-w-52 flex-1 space-y-1">
+                <Label htmlFor="buscar-cliente">Buscar por cliente, código ou título</Label>
+                <Input id="buscar-cliente" value={busca} onChange={(event) => setBusca(event.target.value)} />
+              </div>
+              <Button variant="outline" disabled={!visiveis.length}
+                onClick={() => selecionar(visiveis.map(({ id }) => id), !todosVisiveis)}>
+                {todosVisiveis ? "Desmarcar resultados" : "Selecionar todos os resultados"}
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground" role="status">
+              {visiveis.length} de {clientes.length} clientes · {selecao.length} selecionados · {moeda.format(totalSelecionado)}
             </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="pt-6">
-          <div className="space-y-4">
-            <Button onClick={saveConfig} disabled={saving} className="w-full">
-              {saving ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Salvando...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4 mr-2" />
-                  Salvar Configurações
-                </>
-              )}
+            {visiveis.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow><TableHead>Selecionar</TableHead><TableHead>Cliente</TableHead><TableHead>Parcelas</TableHead><TableHead>Saldo em aberto</TableHead></TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visiveis.map((cliente) => (
+                    <TableRow key={cliente.id} data-state={selecionados.has(cliente.id) ? "selected" : undefined}>
+                      <TableCell>
+                        <Checkbox aria-label={`Selecionar ${cliente.nome}, código ${cliente.id}`}
+                          checked={selecionados.has(cliente.id)}
+                          onCheckedChange={(marcado) => selecionar([cliente.id], marcado === true)} />
+                      </TableCell>
+                      <TableCell className="font-medium">{cliente.nome} <span className="text-muted-foreground">#{cliente.id}</span></TableCell>
+                      <TableCell>{cliente.parcelas.length}</TableCell>
+                      <TableCell>{moeda.format(Number(cliente.saldo))}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : <p className="py-4 text-sm text-muted-foreground">Nenhum cliente encontrado com esses filtros.</p>}
+            <Button disabled={!selecao.length} onClick={() => setRevisar(true)}>
+              <ClipboardList className="mr-2 h-4 w-4" /> Revisar clientes selecionados
             </Button>
-
-            {message && (
-              <div className={`text-center text-sm ${message.startsWith('✅') ? 'text-green-600' : 'text-red-600'}`}>
-                {message}
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Variáveis Disponíveis</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          <p><code>{"{cliente}"}</code> - Nome do cliente</p>
-          <p><code>{"{dias}"}</code> - Dias até o vencimento</p>
-          <p><code>{"{valor}"}</code> - Valor do boleto</p>
-          <p><code>{"{vencimento}"}</code> - Data de vencimento</p>
-        </CardContent>
-      </Card>
-
-      {/* Modal de Edição de Lembrete */}
-      {editingLembrete && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Editar Lembrete #{editingIndex! + 1}</CardTitle>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={closeEditModal}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Dias em relação ao vencimento</Label>
-                <Input
-                  type="number"
-                  value={editingLembrete.dias_antes}
-                  onChange={(e) => setEditingLembrete({ ...editingLembrete, dias_antes: parseInt(e.target.value) || 0 })}
-                  placeholder="Ex: -5, 0, 5"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Negativo = antes (ex: -5), 0 = dia do vencimento, Positivo = depois (ex: 5)
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Mensagem do lembrete</Label>
-                <Textarea
-                  value={editingLembrete.mensagem}
-                  onChange={(e) => setEditingLembrete({ ...editingLembrete, mensagem: e.target.value })}
-                  placeholder="Use {cliente}, {dias}, {valor}, {vencimento} como variáveis"
-                  rows={4}
-                  className="resize-none"
-                />
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPreviewIndex(previewIndex === editingIndex ? null : editingIndex)}
-                  >
-                    <Eye className="w-4 h-4 mr-2" />
-                    {previewIndex === editingIndex ? "Ocultar pré-visualização" : "Pré-visualizar"}
-                  </Button>
-                </div>
-                {previewIndex === editingIndex && (
-                  <div className="bg-muted p-3 rounded-md text-sm">
-                    <p className="font-medium mb-1">Pré-visualização:</p>
-                    <p className="whitespace-pre-wrap">{previewMessage(editingLembrete.mensagem)}</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-4">
-                <Label>Opções de Envio</Label>
-                
-                <div className="flex items-center justify-between border rounded-lg p-4">
-                  <div>
-                    <p className="font-medium">Enviar PDF do boleto</p>
-                    <p className="text-sm text-muted-foreground">Anexar arquivo PDF do boleto na mensagem</p>
-                  </div>
-                  <Switch
-                    checked={editingLembrete.envio_pdf}
-                    onCheckedChange={(checked) => setEditingLembrete({ ...editingLembrete, envio_pdf: checked })}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between border rounded-lg p-4">
-                  <div>
-                    <p className="font-medium">Enviar segunda via (legado)</p>
-                    <p className="text-sm text-muted-foreground">Opção original de envio de boleto</p>
-                  </div>
-                  <Switch
-                    checked={editingLembrete.enviar_segunda_via}
-                    onCheckedChange={(checked) => setEditingLembrete({ ...editingLembrete, enviar_segunda_via: checked })}
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <Button onClick={saveEditedLembrete} className="flex-1">
-                  <Save className="w-4 h-4 mr-2" />
-                  Salvar Alterações
-                </Button>
-                <Button onClick={closeEditModal} variant="outline" className="flex-1">
-                  Cancelar
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+          </CardContent>
+        </Card>
       )}
-    </div>
-  );
-};
 
-export default CobrancaConfig;
+      <Dialog open={revisar} onOpenChange={setRevisar}>
+        <DialogContent className="max-h-[85vh] overflow-auto sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Revisão da cobrança</DialogTitle>
+            <DialogDescription>
+              {selecao.length} clientes · {moeda.format(totalSelecionado)} em aberto. O envio será liberado após conectar a Zenvia.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="divide-y">
+            {selecao.map((cliente) => (
+              <li key={cliente.id} className="py-3">
+                <p className="font-medium">{cliente.nome} · {moeda.format(Number(cliente.saldo))}</p>
+                <ul className="mt-1 text-sm text-muted-foreground">
+                  {cliente.parcelas.map((parcela) => (
+                    <li key={`${parcela.titulo}-${parcela.parcela}`}>
+                      Título {parcela.titulo}, parcela {parcela.parcela} · {formatarData(parcela.vencimento)} · {moeda.format(Number(parcela.saldo))}
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        </DialogContent>
+      </Dialog>
+    </main>
+  );
+}

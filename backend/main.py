@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import PlainTextResponse, HTMLResponse, StreamingResponse
@@ -17,322 +17,9 @@ if sys.platform == 'win32':
     sys.stderr = io_module.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 import pandas as pd
 import requests  # <-- para chamar a API do WhatsApp Cloud
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
-from pytz import timezone
 
-# ============================================================
-# ⏰ SISTEMA DE AGENDAMENTO
-# =================================================<arg_value># Configurar scheduler com timezone de Brasília
-brasilia_tz = timezone('America/Sao_Paulo')
-scheduler = AsyncIOScheduler(timezone=brasilia_tz)
-
-# ============================================================
-# 🔄 DEDUPLICAÇÃO DE MENSAGENS WHATSAPP
-# ============================================================
-processed_messages = set()  # Armazena IDs de mensagens já processadas
-
-async def executar_cobranca_agendada():
-    """Função executada pelo scheduler para verificar boletos vencendo"""
-    logging.warning("⏰ Executando verificação agendada de cobranças...")
-    try:
-        from sienge.sienge_cobranca import verificar_boletos_vencendo, gerar_mensagem_cobranca
-        from supabase_client import salvar_historico_cobranca, atualizar_historico_cobranca
-        from datetime import datetime
-        boletos = verificar_boletos_vencendo()
-        
-        if not boletos:
-            logging.warning("✅ Nenhum boleto para cobrança")
-            return
-        
-        logging.warning(f"📊 {len(boletos)} boletos encontrados para cobrança")
-        
-        for boleto in boletos:
-            mensagem = gerar_mensagem_cobranca(boleto)
-            
-            # Salvar registro no histórico antes de tentar enviar
-            try:
-                # Adicionar motivo inicial se WhatsApp não estiver configurado
-                motivo_inicial = None
-                if not WHATSAPP_PHONE_NUMBER_ID or not WHATSAPP_TOKEN:
-                    motivo_inicial = "WhatsApp não configurado no ambiente (WHATSAPP_PHONE_NUMBER_ID ou WHATSAPP_TOKEN não definidos)"
-                
-                dados_historico = {
-                    "cliente_id": boleto.get("cliente_id"),
-                    "cliente_nome": boleto.get("cliente_nome"),
-                    "cliente_telefone": boleto.get("cliente_telefone"),
-                    "titulo_id": boleto.get("titulo_id"),
-                    "parcela_id": boleto.get("parcela_id"),
-                    "vencimento": boleto.get("vencimento"),
-                    "valor": boleto.get("valor"),
-                    "dias_antes": boleto.get("dias_antes"),
-                    "mensagem_template": boleto.get("mensagem_template"),
-                    "mensagem_enviada": mensagem,
-                    "status": "pendente",
-                    "erro_mensagem": motivo_inicial,
-                    "tipo_envio": "pdf" if boleto.get("envio_pdf") else "texto"
-                }
-                logging.warning(f"💾 Salvando histórico com cliente_id: {boleto.get('cliente_id')}")
-                logging.warning(f"💾 Dados completos: {dados_historico}")
-                historico_salvo = salvar_historico_cobranca(dados_historico)
-                historico_id = historico_salvo.get("id") if isinstance(historico_salvo, dict) else historico_salvo
-                logging.warning(f"💾 Histórico salvo no Supabase: {historico_id}")
-            except Exception as e:
-                logging.warning(f"⚠️ Erro ao salvar histórico: {e}")
-                historico_id = None
-            
-            # Verificar se há telefone válido
-            if not boleto.get("cliente_telefone"):
-                erro_msg = f"Cliente {boleto.get('cliente_nome')} não possui telefone cadastrado"
-                logging.warning(f"⚠️ {erro_msg}")
-                if historico_id:
-                    try:
-                        atualizar_historico_cobranca(historico_id, {
-                            "status": "pendente",
-                            "erro_mensagem": erro_msg
-                        })
-                        logging.warning(f"✅ Status atualizado para pendente com motivo")
-                    except Exception as e:
-                        logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
-                continue
-                
-            # Enviar via WhatsApp Cloud API se configurado
-            if not WHATSAPP_PHONE_NUMBER_ID or not WHATSAPP_TOKEN:
-                # WhatsApp não configurado - já marcado como pendente com motivo acima
-                continue
-                numero = re.sub(r"\D", "", boleto["cliente_telefone"])
-                
-                # Normalizar número de telefone
-                # Adicionar código do país se não tiver
-                if not numero.startswith("55"):
-                    numero = "55" + numero
-                
-                # Validar e ajustar número de telefone
-                # Brasil: código país (55) + DDD (2 dígitos) + número (8 ou 9 dígitos)
-                # Total: 12 ou 13 dígitos
-                if len(numero) == 12:
-                    # Número de 8 dígitos (antigo), pode precisar adicionar o 9
-                    logging.warning(f"⚠️ Número com 8 dígitos detectado: {numero}")
-                    # Tentar adicionar o 9 após o DDD
-                    ddd = numero[:4]  # 55 + DDD
-                    numero_final = ddd + "9" + numero[4:]
-                    logging.warning(f"📱 Ajustando para 9 dígitos: {numero_final}")
-                    numero = numero_final
-                elif len(numero) == 13:
-                    # Número de 9 dígitos (padrão atual)
-                    pass
-                else:
-                    erro_msg = f"Cliente {boleto.get('cliente_nome')} com número de telefone inválido: {numero}"
-                    logging.warning(f"⚠️ {erro_msg}")
-                    if historico_id:
-                        try:
-                            atualizar_historico_cobranca(historico_id, {
-                                "status": "pendente",
-                                "erro_mensagem": erro_msg
-                            })
-                            logging.warning(f"✅ Status atualizado para pendente com motivo")
-                        except Exception as e:
-                            logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
-                    continue
-                
-                if numero.startswith("55"):
-                    # Usar template aprovado da Meta para envio de cobrança
-                    # Sistema seleciona automaticamente o template baseado nos dias
-                    try:
-                        from whatsapp_templates import send_whatsapp_template_message
-                        from supabase_client import buscar_configuracao_whatsapp_empreendimento
-                        
-                        logging.warning(f"📤 Enviando cobrança via template para {numero}")
-                        logging.warning(f"🆔 histórico_id: {historico_id}")
-                        
-                        # Buscar configuração WhatsApp específica do empreendimento (se disponível)
-                        enterprise_id = boleto.get("enterprise_id")
-                        whatsapp_phone_number_id = None
-                        whatsapp_token = None
-                        
-                        if enterprise_id:
-                            try:
-                                config_whatsapp = buscar_configuracao_whatsapp_empreendimento(enterprise_id)
-                                if config_whatsapp:
-                                    whatsapp_phone_number_id = config_whatsapp.get("whatsapp_phone_number_id")
-                                    whatsapp_token = config_whatsapp.get("whatsapp_token")
-                                    # NÃO logar o token por segurança
-                                    logging.warning(f"📱 Usando WhatsApp do empreendimento {enterprise_id}: {whatsapp_phone_number_id}")
-                                else:
-                                    logging.warning(f"⚠️ Nenhuma configuração WhatsApp encontrada para empreendimento {enterprise_id}, usando global")
-                            except Exception as e:
-                                logging.warning(f"⚠️ Erro ao buscar configuração WhatsApp do empreendimento: {e}")
-                        
-                        # Não passar template_name - sistema seleciona automaticamente
-                        message_id = send_whatsapp_template_message(
-                            numero, 
-                            boleto, 
-                            template_name=None,
-                            whatsapp_phone_number_id=whatsapp_phone_number_id,
-                            whatsapp_token=whatsapp_token
-                        )
-                        
-                        if message_id:
-                            logging.warning(f"✅ Template enviado com sucesso para {numero}")
-                            logging.warning(f"🆔 message_id retornado: {message_id}")
-                            
-                            # Atualizar status no histórico
-                            if historico_id:
-                                try:
-                                    atualizar_historico_cobranca(historico_id, {
-                                        "status": "enviado",
-                                        "enviado_em": datetime.now().isoformat()
-                                    })
-                                    logging.warning(f"✅ Status atualizado para enviado")
-                                except Exception as e:
-                                    logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
-                        else:
-                            erro_msg = "Erro ao enviar template (message_id None)"
-                            logging.warning(f"⚠️ {erro_msg}")
-                            if historico_id:
-                                try:
-                                    atualizar_historico_cobranca(historico_id, {
-                                        "status": "pendente",
-                                        "erro_mensagem": erro_msg
-                                    })
-                                    logging.warning(f"✅ Status atualizado para pendente com motivo")
-                                except Exception as e:
-                                    logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
-                    except Exception as e:
-                        erro_msg = f"Erro ao enviar template via WhatsApp: {str(e)}"
-                        logging.warning(f"❌ {erro_msg}")
-                        # Fallback para envio de documento direto se template falhar
-                        logging.warning("⚠️ Fallback para envio de documento direto")
-                        
-                        # Verificar se deve enviar PDF do boleto
-                        if boleto.get("envio_pdf"):
-                            from sienge.sienge_cobranca import baixar_pdf_boleto
-                            titulo_id = boleto.get("titulo_id")
-                            parcela_id = boleto.get("parcela_id")
-                            pdf_url = boleto.get("pdf_url")
-                            
-                            # Baixar PDF do boleto
-                            pdf_content = baixar_pdf_boleto(titulo_id, parcela_id, pdf_url)
-                            
-                            if pdf_content:
-                                # Enviar PDF como documento
-                                filename = f"boleto_{titulo_id}_{parcela_id}.pdf"
-                                logging.warning(f"📤 Enviando PDF via WhatsApp para {numero}")
-                                try:
-                                    message_id = send_whatsapp_document(numero, pdf_content, filename, mensagem)
-                                    
-                                    if message_id:
-                                        logging.warning(f"✅ PDF enviado com sucesso para {numero}")
-                                        if historico_id:
-                                            try:
-                                                atualizar_historico_cobranca(historico_id, {
-                                                    "status": "enviado",
-                                                    "enviado_em": datetime.now().isoformat()
-                                                })
-                                            except Exception as e:
-                                                logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
-                                    else:
-                                        logging.warning(f"⚠️ Erro ao enviar PDF para {numero}")
-                                        if historico_id:
-                                            try:
-                                                atualizar_historico_cobranca(historico_id, {
-                                                    "status": "pendente",
-                                                    "erro_mensagem": "Erro ao enviar PDF"
-                                                })
-                                            except Exception as e:
-                                                logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
-                                except Exception as e:
-                                    logging.warning(f"❌ Erro ao enviar PDF: {e}")
-                                    if historico_id:
-                                        try:
-                                            atualizar_historico_cobranca(historico_id, {
-                                                "status": "pendente",
-                                                "erro_mensagem": str(e)
-                                            })
-                                        except Exception as e2:
-                                            logging.warning(f"⚠️ Erro ao atualizar histórico: {e2}")
-                        else:
-                            # Enviar mensagem de texto normal
-                            logging.warning(f"📤 Enviando mensagem de texto para {numero}")
-                            try:
-                                message_id = send_whatsapp_message(numero, mensagem)
-                                
-                                if message_id:
-                                    logging.warning(f"✅ Mensagem enviada com sucesso para {numero}")
-                                    if historico_id:
-                                        try:
-                                            atualizar_historico_cobranca(historico_id, {
-                                                "status": "enviado",
-                                                "enviado_em": datetime.now().isoformat()
-                                            })
-                                        except Exception as e:
-                                            logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
-                                else:
-                                    logging.warning(f"⚠️ Erro ao enviar mensagem para {numero}")
-                                    if historico_id:
-                                        try:
-                                            atualizar_historico_cobranca(historico_id, {
-                                                "status": "pendente",
-                                                "erro_mensagem": "Erro ao enviar mensagem"
-                                            })
-                                        except Exception as e:
-                                            logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
-                            except Exception as e:
-                                logging.warning(f"❌ Erro ao enviar mensagem: {e}")
-                                if historico_id:
-                                    try:
-                                        atualizar_historico_cobranca(historico_id, {
-                                            "status": "pendente",
-                                            "erro_mensagem": str(e)
-                                        })
-                                    except Exception as e2:
-                                        logging.warning(f"⚠️ Erro ao atualizar histórico: {e2}")
-    except Exception as e:
-        logging.error(f"❌ Erro na execução agendada: {e}", exc_info=True)
-
-def atualizar_agendamento(horario: str):
-    """Atualiza o agendamento com novo horário"""
-    global scheduler
-    
-    # Remover job existente se houver
-    remover_agendamento()
-    
-    # Parse horário (formato HH:MM)
-    try:
-        hora, minuto = map(int, horario.split(":"))
-        logging.warning(f"⏰ Configurando agendamento para {hora}:{minuto} (timezone: {brasilia_tz})")
-        
-        # Adicionar novo job
-        scheduler.add_job(
-            executar_cobranca_agendada,
-            CronTrigger(hour=hora, minute=minuto, timezone=brasilia_tz),
-            id="cobranca_agendada",
-            replace_existing=True
-        )
-        
-        # Listar jobs agendados
-        jobs = scheduler.get_jobs()
-        logging.warning(f"📋 Jobs agendados: {[job.id for job in jobs]}")
-        if jobs:
-            for job in jobs:
-                logging.warning(f"📋 Job {job.id}: próxima execução em {job.next_run_time}")
-        
-        # Iniciar scheduler se não estiver rodando
-        if not scheduler.running:
-            scheduler.start()
-            logging.warning("✅ Scheduler iniciado")
-        else:
-            logging.warning("✅ Agendamento atualizado")
-    except Exception as e:
-        logging.error(f"❌ Erro ao configurar agendamento: {e}", exc_info=True)
-
-def remover_agendamento():
-    """Remove o agendamento de cobrança"""
-    try:
-        scheduler.remove_job("cobranca_agendada")
-        logging.warning("✅ Agendamento removido")
-    except Exception:
-        pass  # Job não existe
+# Webhook do WhatsApp: descarta eventos já processados.
+processed_messages = set()
 
 # Twilio
 from twilio.rest import Client
@@ -350,7 +37,10 @@ from sienge.sienge_cobranca import (
 # ============================================================
 logging.basicConfig(level=logging.INFO)
 logging.warning("🔄 MAIN.PY CARREGADO - VERSÃO COM LOGS WARNING NO TESTAR-COBRANCA")
+from zenvia_piloto import router as zenvia_piloto_router
+
 app = FastAPI()
+app.include_router(zenvia_piloto_router)
 
 # ============================================================
 # 🌐 CONFIGURAÇÃO CORS
@@ -368,71 +58,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ============================================================
-# ⏰ SCHEDULER PARA COBRANÇAS AUTOMÁTICAS
-# ============================================================
-scheduler = AsyncIOScheduler()
-
-async def job_cobranca():
-    """Job agendado: verificar boletos vencendo baseado nas configurações"""
-    logging.info("🔔 Executando job de cobrança automática...")
-    try:
-        boletos = verificar_boletos_vencendo()
-        for boleto in boletos:
-            if boleto.get("cliente_telefone"):
-                mensagem = gerar_mensagem_cobranca(boleto)
-                # Enviar via WhatsApp Cloud API se configurado
-                if WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN:
-                    numero = re.sub(r"\D", "", boleto["cliente_telefone"])
-                    
-                    # Normalizar número de telefone
-                    if not numero.startswith("55"):
-                        numero = "55" + numero
-                    
-                    # Ajustar para 9 dígitos se necessário
-                    if len(numero) == 12:
-                        ddd = numero[:4]
-                        numero = ddd + "9" + numero[4:]
-                    
-                    message_id = send_whatsapp_cloud_message(numero, mensagem)
-                    
-                    # Salvar log de mensagem enviada com message_id
-                    try:
-                        from supabase_client import salvar_log_mensagem
-                        salvar_log_mensagem({
-                            "usuario_id": f"whatsapp:{numero}",
-                            "telefone": numero,
-                            "mensagem_recebida": None,
-                            "mensagem_enviada": mensagem,
-                            "tipo": "enviada",
-                            "status": "sent",
-                            "whatsapp_message_id": message_id
-                        })
-                    except Exception as e:
-                        logging.warning(f"⚠️ Erro ao salvar log de mensagem enviada: {e}")
-        logging.info(f"✅ Job de cobrança concluído. {len(boletos)} boletos processados.")
-    except Exception as e:
-        logging.error(f"❌ Erro no job de cobrança: {e}")
-
-# Job hardcoded removido - usar apenas agendamento dinâmico via configuracao
-
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# ============================================================
-# 🚀 EVENTO DE STARTUP
-# ============================================================
-@app.on_event("startup")
-async def startup_event():
-    """Inicia o scheduler quando o servidor sobe"""
-    scheduler.start()
-    logging.info("⏰ Scheduler iniciado - Jobs de cobrança automática ativos")
-    logging.warning(f"📋 Timezone do scheduler: {scheduler.timezone}")
-    jobs = scheduler.get_jobs()
-    logging.warning(f"📋 Jobs ativos no startup: {[job.id for job in jobs]}")
-    if jobs:
-        for job in jobs:
-            logging.warning(f"📋 Job {job.id}: próxima execução em {job.next_run_time}")
 
 # ============================================================
 # 🔐 CONFIG TWILIO (WHATSAPP)
@@ -1001,296 +628,9 @@ async def exportar_historico_pdf(data_inicio: str = None, data_fim: str = None, 
         headers={"Content-Disposition": "attachment; filename=historico_cobrancas.pdf"},
     )
 
-@app.post("/testar-cobranca")
+@app.post("/testar-cobranca", include_in_schema=False)
 async def testar_cobranca():
-    """
-    Endpoint para testar manualmente o sistema de cobrança
-    """
-    logging.warning("🧪 Iniciando teste manual de cobrança...")
-    logging.warning("🧪 Chamando verificar_boletos_vencendo()...")
-    try:
-        boletos = verificar_boletos_vencendo()
-        logging.warning(f"📋 verificar_boletos_vencendo() retornou {len(boletos)} boletos")
-        
-        resultados = []
-        for boleto in boletos:
-            if boleto.get("cliente_telefone"):
-                numero = re.sub(r"\D", "", boleto.get("cliente_telefone"))
-                mensagem = gerar_mensagem_cobranca(boleto)
-                
-                # Verificar se cobrança já foi enviada (evitar duplicação via Supabase)
-                try:
-                    from supabase_client import verificar_cobranca_enviada
-                    titulo_id = boleto.get("titulo_id")
-                    parcela_id = boleto.get("parcela_id")
-                    dias_antes = boleto.get("dias_antes")
-                    
-                    if verificar_cobranca_enviada(titulo_id, parcela_id, dias_antes):
-                        logging.warning(f"⏭️ Cobrança já enviada para {boleto.get('cliente_nome')}, ignorando")
-                        resultados.append({
-                            "cliente": boleto.get("cliente_nome"),
-                            "telefone": numero,
-                            "status": "já enviado (duplicado)",
-                        })
-                        continue
-                except Exception as e:
-                    logging.warning(f"⚠️ Erro ao verificar duplicação: {e}")
-                
-                # Salvar registro no histórico antes de enviar
-                try:
-                    from supabase_client import salvar_historico_cobranca
-                    from datetime import datetime
-                    historico_salvo = salvar_historico_cobranca({
-                        "cliente_id": boleto.get("cliente_id"),
-                        "cliente_nome": boleto.get("cliente_nome"),
-                        "cliente_telefone": boleto.get("cliente_telefone"),
-                        "titulo_id": boleto.get("titulo_id"),
-                        "parcela_id": boleto.get("parcela_id"),
-                        "vencimento": boleto.get("vencimento"),
-                        "valor": boleto.get("valor"),
-                        "dias_antes": boleto.get("dias_antes"),
-                        "mensagem_template": boleto.get("mensagem_template"),
-                        "mensagem_enviada": mensagem,
-                        "status": "pendente",
-                        "tipo_envio": "pdf" if boleto.get("enviar_segunda_via") else "texto"
-                    })
-                    # Extrair apenas o UUID do dicionário retornado
-                    historico_id = historico_salvo.get("id") if isinstance(historico_salvo, dict) else historico_salvo
-                    logging.warning(f"💾 Histórico salvo no Supabase: {historico_id}")
-                except Exception as e:
-                    logging.warning(f"⚠️ Erro ao salvar histórico: {e}")
-                
-                # Enviar via WhatsApp Cloud API se configurado
-                if WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN:
-                    numero = re.sub(r"\D", "", boleto["cliente_telefone"])
-                    # Adicionar código do país 55 se for número brasileiro (10 ou 11 dígitos)
-                    if len(numero) == 11 or len(numero) == 10:
-                        numero = "55" + numero
-                    if numero.startswith("55"):
-                        # Buscar configuração WhatsApp específica do empreendimento (se disponível)
-                        enterprise_id = boleto.get("enterprise_id")
-                        whatsapp_phone_number_id = None
-                        whatsapp_token = None
-                        
-                        if enterprise_id:
-                            try:
-                                from supabase_client import buscar_configuracao_whatsapp_empreendimento
-                                config_whatsapp = buscar_configuracao_whatsapp_empreendimento(enterprise_id)
-                                if config_whatsapp:
-                                    whatsapp_phone_number_id = config_whatsapp.get("whatsapp_phone_number_id")
-                                    whatsapp_token = config_whatsapp.get("whatsapp_token")
-                                    # NÃO logar o token por segurança
-                                    logging.warning(f"📱 Usando WhatsApp do empreendimento {enterprise_id}: {whatsapp_phone_number_id}")
-                                else:
-                                    logging.warning(f"⚠️ Nenhuma configuração WhatsApp encontrada para empreendimento {enterprise_id}, usando global")
-                            except Exception as e:
-                                logging.warning(f"⚠️ Erro ao buscar configuração WhatsApp do empreendimento: {e}")
-                        
-                        # Verificar se deve enviar PDF do boleto
-                        if boleto.get("envio_pdf"):
-                            from sienge.sienge_cobranca import baixar_pdf_boleto
-                            titulo_id = boleto.get("titulo_id")
-                            parcela_id = boleto.get("parcela_id")
-                            pdf_url = boleto.get("pdf_url")  # URL da verificação de aptidão
-                            
-                            # Baixar PDF do boleto (usando URL da verificação para evitar requisição duplicada)
-                            pdf_content = baixar_pdf_boleto(titulo_id, parcela_id, pdf_url)
-                            
-                            if pdf_content:
-                                # Enviar PDF como documento
-                                filename = f"boleto_{titulo_id}_{parcela_id}.pdf"
-                                logging.warning(f"📤 Enviando PDF via WhatsApp para {numero}")
-                                logging.warning(f"🆔 histórico_id: {historico_id}")
-                                try:
-                                    message_id = send_whatsapp_document(numero, pdf_content, filename, mensagem, whatsapp_phone_number_id, whatsapp_token)
-                                    
-                                    # Verificar se o envio foi bem-sucedido
-                                    if message_id is None:
-                                        logging.warning(f"❌ Falha ao enviar PDF para {numero}")
-                                        if historico_id:
-                                            try:
-                                                from supabase_client import atualizar_historico_cobranca
-                                                atualizar_historico_cobranca(historico_id, {
-                                                    "status": "erro",
-                                                    "erro_mensagem": "Erro ao enviar PDF via WhatsApp Cloud API (401 Authentication Error)"
-                                                })
-                                                logging.warning(f"✅ Status atualizado para erro")
-                                            except Exception as e:
-                                                logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
-                                    else:
-                                        logging.warning(f"✅ PDF enviado com sucesso para {numero}")
-                                        
-                                        # Salvar log de mensagem enviada com message_id
-                                        try:
-                                            from supabase_client import salvar_log_mensagem
-                                            salvar_log_mensagem({
-                                                "usuario_id": f"whatsapp:{numero}",
-                                                "telefone": numero,
-                                                "mensagem_recebida": None,
-                                                "mensagem_enviada": mensagem,
-                                                "tipo": "enviada",
-                                                "status": "sent",
-                                                "whatsapp_message_id": message_id
-                                            })
-                                            logging.info(f"💾 Log de mensagem salvo com message_id: {message_id}")
-                                        except Exception as e:
-                                            logging.warning(f"⚠️ Erro ao salvar log de mensagem enviada: {e}")
-                                        
-                                        # Atualizar status no histórico
-                                        logging.warning(f"🔄 Atualizando status no Supabase...")
-                                        try:
-                                            from supabase_client import atualizar_historico_cobranca
-                                            atualizar_historico_cobranca(historico_id, {
-                                                "status": "enviado",
-                                                "enviado_em": datetime.now().isoformat()
-                                            })
-                                            logging.warning(f"✅ Status atualizado para enviado")
-                                        except Exception as e:
-                                            logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
-                                    resultados.append({
-                                        "cliente": boleto.get("cliente_nome"),
-                                        "telefone": numero,
-                                        "status": "enviado (PDF)",
-                                        "mensagem": mensagem[:100]
-                                    })
-                                except Exception as e:
-                                    logging.warning(f"❌ Erro ao enviar PDF via WhatsApp: {e}")
-                                    # Atualizar status como erro
-                                    try:
-                                        from supabase_client import atualizar_historico_cobranca
-                                        atualizar_historico_cobranca(historico_id, {
-                                            "status": "erro",
-                                            "erro_mensagem": gerar_mensagem_erro_estruturada(e, "envio de PDF", boleto.get("cliente_nome"))
-                                        })
-                                    except Exception as e2:
-                                        logging.warning(f"⚠️ Erro ao atualizar histórico com erro: {e2}")
-                            else:
-                                # Se falhar ao baixar PDF, enviar apenas mensagem
-                                logging.warning(f"📤 Enviando mensagem de texto para {numero}")
-                                try:
-                                    message_id = send_whatsapp_cloud_message(numero, mensagem)
-                                    logging.warning(f"✅ Mensagem enviada com sucesso para {numero}")
-                                    
-                                    # Salvar log de mensagem enviada com message_id
-                                    try:
-                                        from supabase_client import salvar_log_mensagem
-                                        salvar_log_mensagem({
-                                            "usuario_id": f"whatsapp:{numero}",
-                                            "telefone": numero,
-                                            "mensagem_recebida": None,
-                                            "mensagem_enviada": mensagem,
-                                            "tipo": "enviada",
-                                            "status": "sent",
-                                            "whatsapp_message_id": message_id
-                                        })
-                                    except Exception as e:
-                                        logging.warning(f"⚠️ Erro ao salvar log de mensagem enviada: {e}")
-                                    
-                                    # Atualizar status no histórico
-                                    try:
-                                        from supabase_client import atualizar_historico_cobranca
-                                        atualizar_historico_cobranca(historico_id, {
-                                            "status": "enviado",
-                                            "tipo_envio": "texto",
-                                            "erro_mensagem": "PDF falhou, enviado como texto",
-                                            "enviado_em": datetime.now().isoformat()
-                                        })
-                                    except Exception as e:
-                                        logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
-                                    resultados.append({
-                                        "cliente": boleto.get("cliente_nome"),
-                                        "telefone": numero,
-                                        "status": "enviado (texto apenas - PDF falhou)",
-                                        "mensagem": mensagem[:100]
-                                    })
-                                except Exception as e:
-                                    logging.warning(f"❌ Erro ao enviar mensagem via WhatsApp: {e}")
-                                    # Atualizar status como erro
-                                    try:
-                                        from supabase_client import atualizar_historico_cobranca
-                                        atualizar_historico_cobranca(historico_id, {
-                                            "status": "erro",
-                                            "erro_mensagem": gerar_mensagem_erro_estruturada(e, "envio de mensagem", boleto.get("cliente_nome"))
-                                        })
-                                    except Exception as e2:
-                                        logging.warning(f"⚠️ Erro ao atualizar histórico com erro: {e2}")
-                        else:
-                            # Enviar apenas mensagem de texto
-                            logging.warning(f"📤 Enviando mensagem de texto para {numero}")
-                            try:
-                                message_id = send_whatsapp_cloud_message(numero, mensagem)
-                                logging.warning(f"✅ Mensagem enviada com sucesso para {numero}")
-                                
-                                # Salvar log de mensagem enviada com message_id
-                                try:
-                                    from supabase_client import salvar_log_mensagem
-                                    salvar_log_mensagem({
-                                        "usuario_id": f"whatsapp:{numero}",
-                                        "telefone": numero,
-                                        "mensagem_recebida": None,
-                                        "mensagem_enviada": mensagem,
-                                        "tipo": "enviada",
-                                        "status": "sent",
-                                        "whatsapp_message_id": message_id
-                                    })
-                                except Exception as e:
-                                    logging.warning(f"⚠️ Erro ao salvar log de mensagem enviada: {e}")
-                                
-                                # Atualizar status no histórico
-                                try:
-                                    from supabase_client import atualizar_historico_cobranca
-                                    atualizar_historico_cobranca(historico_id, {
-                                        "status": "enviado",
-                                        "enviado_em": datetime.now().isoformat()
-                                    })
-                                    logging.warning(f"✅ Status atualizado para enviado")
-                                except Exception as e:
-                                    logging.warning(f"⚠️ Erro ao atualizar histórico: {e}")
-                                resultados.append({
-                                    "cliente": boleto.get("cliente_nome"),
-                                    "telefone": numero,
-                                    "status": "enviado (texto)",
-                                    "mensagem": mensagem[:100]
-                                })
-                            except Exception as e:
-                                logging.warning(f"❌ Erro ao enviar mensagem via WhatsApp: {e}")
-                                # Atualizar status como erro
-                                try:
-                                    from supabase_client import atualizar_historico_cobranca
-                                    atualizar_historico_cobranca(historico_id, {
-                                        "status": "erro",
-                                        "erro_mensagem": gerar_mensagem_erro_estruturada(e, "envio de mensagem", boleto.get("cliente_nome"))
-                                    })
-                                except Exception as e2:
-                                    logging.warning(f"⚠️ Erro ao atualizar histórico com erro: {e2}")
-                    else:
-                        resultados.append({
-                            "cliente": boleto.get("cliente_nome"),
-                            "telefone": numero,
-                            "status": "ignorado (não brasileiro)",
-                        })
-                else:
-                    resultados.append({
-                        "cliente": boleto.get("cliente_nome"),
-                        "telefone": boleto.get("cliente_telefone"),
-                        "status": "não enviado (WhatsApp não configurado)",
-                        "mensagem": mensagem[:100]
-                    })
-            else:
-                resultados.append({
-                    "cliente": boleto.get("cliente_nome"),
-                    "status": "sem telefone",
-                })
-        
-        logging.warning(f"🧪 Teste concluído: {len(resultados)} resultados")
-        return {
-            "total_boletos": len(boletos),
-            "enviados": len([r for r in resultados if r.get("status") == "enviado"]),
-            "resultados": resultados
-        }
-    except Exception as e:
-        logging.exception("❌ Erro ao testar cobrança:")
-        return {"error": str(e)}
+    raise HTTPException(410, "O envio em lote da cobrança automática foi desativado.")
 
 
 @app.get("/cobranca-config")
@@ -1305,7 +645,7 @@ async def carregar_configuracao_cobranca_api():
         if config_supabase:
             logging.info(f"✅ Configuração carregada do Supabase: {len(config_supabase.get('lembretes', []))} lembretes")
             return {
-                "ativo": config_supabase.get("ativo", False),
+                "ativo": False,
                 "horario_execucao": config_supabase.get("horario_execucao", "09:00"),
                 "lembretes": config_supabase.get("lembretes", []),
                 "mensagem_atendimento": config_supabase.get("mensagem_atendimento", "Olá, esse número é usado apenas para envio automático. Caso tenha alguma dúvida, fale com um de nossos atendentes pelo número (91) 9999-9999")
@@ -2598,17 +1938,6 @@ def save_config(config: SiengeConfig):
 # Ver sienge_cobranca.py para carregar_configuracao_cobranca()
 # Ver supabase_client.py para salvar_configuracao_cobranca()
 
-@app.post("/testar-cobranca")
-async def testar_cobranca():
-    """Endpoint para testar manualmente o job de cobrança"""
-    try:
-        logging.warning("🧪 Iniciando teste manual de cobrança...")
-        await executar_cobranca_agendada()
-        return {"success": True, "message": "Teste de cobrança executado"}
-    except Exception as e:
-        logging.error(f"❌ Erro no teste de cobrança: {e}")
-        return {"success": False, "error": str(e)}
-
 @app.get("/listar-boletos-teste")
 async def listar_boletos_teste():
     """
@@ -3016,7 +2345,9 @@ async def gerar_relatorio_pdf(
 
 @app.post("/cobranca-config")
 def save_cobranca_config(config: ConfiguracaoCobranca):
-    """Salva novas configurações de cobrança automática no Supabase"""
+    """Preserva as preferências legadas utilizadas pelo atendimento."""
+    if config.ativo:
+        raise HTTPException(409, "O agendamento foi desativado. A cobrança agora é manual.")
     try:
         logging.warning(f"📝 Recebendo configuração: ativo={config.ativo}, horario={config.horario_execucao}, lembretes={len(config.lembretes)}")
         
@@ -3061,12 +2392,6 @@ def save_cobranca_config(config: ConfiguracaoCobranca):
         import importlib
         from sienge import sienge_cobranca
         importlib.reload(sienge_cobranca)
-        
-        # Atualizar agendamento se estiver ativo
-        if config.ativo:
-            atualizar_agendamento(config.horario_execucao)
-        else:
-            remover_agendamento()
         
         logging.info(f"✅ Configuração de cobrança atualizada")
         return {"success": True, "message": "Configurações de cobrança salvas com sucesso"}
