@@ -3,6 +3,7 @@
 import argparse
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from hashlib import sha256
 from hmac import compare_digest
 import json
 import os
@@ -86,6 +87,10 @@ def clientes_cobranca(
     apenas_vencidas: bool = False,
 ):
     response.headers["Cache-Control"] = "no-store"
+    return listar_clientes_cobranca(centro_custo, inicio, fim, apenas_vencidas)
+
+
+def listar_clientes_cobranca(centro_custo: int, inicio: date, fim: date, apenas_vencidas: bool) -> list[dict]:
     hoje = datetime.now(ZoneInfo("America/Sao_Paulo")).date()
     clientes = {}
     for item in consultar_parcelas(centro_custo, inicio, fim):
@@ -116,12 +121,18 @@ def clientes_cobranca(
 
     resultado = []
     for cliente in clientes.values():
-        parcelas = sorted(cliente["parcelas"].values(), key=lambda item: item["vencimento"])
+        parcelas = sorted(
+            cliente["parcelas"].values(),
+            key=lambda item: (item["vencimento"], item["titulo"], item["parcela"]),
+        )
+        parcelas = [{**parcela, "saldo": format(parcela["saldo"], ".2f")} for parcela in parcelas]
+        versao = sha256(json.dumps(parcelas, sort_keys=True).encode()).hexdigest()
         resultado.append({
             "id": cliente["id"],
             "nome": cliente["nome"],
-            "saldo": format(sum(parcela["saldo"] for parcela in parcelas), "f"),
-            "parcelas": [{**parcela, "saldo": format(parcela["saldo"], "f")} for parcela in parcelas],
+            "saldo": format(sum(Decimal(parcela["saldo"]) for parcela in parcelas), "f"),
+            "parcelas": parcelas,
+            "versao": versao,
         })
     return sorted(resultado, key=lambda cliente: (cliente["nome"].casefold(), cliente["id"]))
 
@@ -131,6 +142,16 @@ def enviar_teste(sender_id: str, template_id: str, campos: dict[str, str]) -> st
     destino = os.getenv("ZENVIA_TEST_PHONE", "")
     if not token or not re.fullmatch(r"55[1-9][0-9]{9,10}", destino):
         raise ValueError("Configure o token e um número interno com DDI e DDD.")
+    return enviar_template(token, sender_id, template_id, destino, campos)
+
+
+class RespostaZenvia(ValueError):
+    def __init__(self, mensagem: str, status: str):
+        super().__init__(mensagem)
+        self.status = status
+
+
+def enviar_template(token: str, sender_id: str, template_id: str, destino: str, campos: dict[str, str]) -> str:
     if not sender_id.strip() or not template_id.strip():
         raise ValueError("Informe o Sender ID e o ID do template aprovado.")
     try:
@@ -143,17 +164,19 @@ def enviar_teste(sender_id: str, template_id: str, campos: dict[str, str]) -> st
                 "contents": [{"type": "template", "templateId": template_id, "fields": campos}],
             },
             timeout=15,
+            allow_redirects=False,
         )
     except requests.RequestException:
-        raise ValueError("A Zenvia não respondeu. Confira o envio antes de repetir o teste.") from None
+        raise RespostaZenvia("A Zenvia não respondeu. Confira o envio antes de repetir.", "incerto") from None
     if not resposta.ok:
-        raise ValueError(f"A Zenvia recusou a requisição (HTTP {resposta.status_code}).")
+        status = "incerto" if resposta.status_code >= 500 or resposta.status_code == 408 else "recusado"
+        raise RespostaZenvia(f"A Zenvia retornou HTTP {resposta.status_code}.", status)
     try:
         identificador = resposta.json().get("id")
     except (ValueError, AttributeError):
         identificador = None
     if not isinstance(identificador, str) or not identificador:
-        raise ValueError("Resposta sem ID da mensagem. Confira o envio antes de repetir o teste.")
+        raise RespostaZenvia("Resposta sem ID da mensagem. Confira o envio antes de repetir.", "incerto")
     return identificador
 
 
